@@ -43,7 +43,7 @@ app.get('/api/route', async (req, res) => {
         let duration = 0;
 
         if (mode === 'driving') {
-            distance = parseFloat(data.route.paths[0].distance); // 获取出行距离（米）并转换为数字
+            distance = parseFloat(data.route.paths[0].distance); // 获取出行距离（米）
             const tolls = parseFloat(data.route.tolls) || 0; // 获取收费并转换为数字
             const costPerKm = 1; // 假设每公里的成本（可以根据实际情况调整）
             cost = (distance / 1000) * costPerKm + tolls; // 计算总成本
@@ -58,6 +58,10 @@ app.get('/api/route', async (req, res) => {
         } else if (mode === 'bicycling' || mode === 'electrobike') {
             distance = parseFloat(data.route.paths[0].distance); // 获取出行距离（米）并转换为数字
             duration = parseFloat(data.route.paths[0].duration); // 将字符串转换为数字
+            if (mode === 'electrobike') {
+                const costPerKm = 0.02; // 电动车每公里成本
+                cost = (distance / 1000) * costPerKm; // 计算总成本
+            }
         }
 
         // 转换单位
