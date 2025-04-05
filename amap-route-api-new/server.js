@@ -13,8 +13,8 @@ app.get('/api/route', async (req, res) => {
     // 根据不同的出行方式构建 URL
     let url;
     if (mode === 'transit') {
-        // 公交路线规划，确保添加城市参数
-        url = `https://restapi.amap.com/v3/direction/transit/integrated?origin=${origin}&destination=${destination}&city=010&key=${amapKey}`;
+        // 公交路线规划，确保添加深圳城市编码
+        url = `https://restapi.amap.com/v3/direction/transit/integrated?origin=${origin}&destination=${destination}&city=0755&key=${amapKey}`;
     } else if (mode === 'driving') {
         // 驾车路线规划
         url = `https://restapi.amap.com/v3/direction/driving?origin=${origin}&destination=${destination}&key=${amapKey}`;
