@@ -19,8 +19,7 @@ app.get('/api/route', async (req, res) => {
         // 步行路线规划
         url = `https://restapi.amap.com/v5/direction/${mode}?origin=${origin}&destination=${destination}&key=${amapKey}&show_fields=duration,distance`;
     } else {
-        // 其他出行方式
-        url = `https://restapi.amap.com/v5/direction/${mode}?origin=${origin}&destination=${destination}&key=${amapKey}`;
+        return res.status(400).json({ status: "0", info: "无效的出行方式" });
     }
 
     try {
@@ -48,9 +47,6 @@ app.get('/api/route', async (req, res) => {
             distance = data.route.transits[0].distance; // 获取出行距离（米）
             duration = parseFloat(data.route.transits[0].duration); // 将字符串转换为数字
         } else if (mode === 'walking') {
-            distance = data.route.paths[0].distance; // 获取出行距离（米）
-            duration = parseFloat(data.route.paths[0].duration); // 将字符串转换为数字
-        } else {
             distance = data.route.paths[0].distance; // 获取出行距离（米）
             duration = parseFloat(data.route.paths[0].duration); // 将字符串转换为数字
         }
