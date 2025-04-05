@@ -3,6 +3,9 @@ const axios = require('axios');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// 假设的燃油车单位公里成本（元/公里）
+const fuelCostPerKm = 1.0; // 根据实际情况调整
+
 app.get('/api/route', async (req, res) => {
     const { origin, destination, mode } = req.query;
     const amapKey = process.env.AMAP_API_KEY; // 使用环境变量
@@ -40,26 +43,27 @@ app.get('/api/route', async (req, res) => {
         let cost = 0;
 
         if (mode === 'driving') {
-            distance = parseFloat(data.route.paths[0].distance);
-            duration = parseFloat(data.route.paths[0].duration);
-            cost = parseFloat(data.route.tolls) || 0;
+            distance = parseFloat(data.route.paths[0].distance); // 获取出行距离（米）
+            duration = parseFloat(data.route.paths[0].duration); // 获取出行时长（秒）
+            const tolls = parseFloat(data.route.tolls) || 0; // 获取收费并转换为数字
+            cost = (distance / 1000) * fuelCostPerKm + tolls; // 计算总成本
         } else if (mode === 'transit') {
-            distance = parseFloat(data.route.transits[0].distance);
-            duration = parseFloat(data.route.transits[0].duration);
-            cost = parseFloat(data.route.cost) || 0;
+            distance = parseFloat(data.route.transits[0].distance); // 获取出行距离（米）
+            duration = parseFloat(data.route.transits[0].duration); // 获取出行时长（秒）
+            cost = parseFloat(data.route.transit_fee) || 0; // 公交费用
         } else if (mode === 'walking' || mode === 'bicycling') {
-            distance = parseFloat(data.route.paths[0].distance);
-            duration = parseFloat(data.route.paths[0].duration);
+            distance = parseFloat(data.route.paths[0].distance); // 获取出行距离（米）
+            duration = parseFloat(data.route.paths[0].duration); // 获取出行时长（秒）
         }
 
         // 转换单位
-        const distanceInKm = (distance / 1000).toFixed(2);
-        const durationInMinutes = (duration / 60).toFixed(2);
+        const distanceInKm = (distance / 1000).toFixed(2); // 转换为公里
+        const durationInMinutes = (duration / 60).toFixed(2); // 转换为分钟
 
         res.json({
-            duration: durationInMinutes,
-            distance: distanceInKm,
-            cost: cost
+            duration: durationInMinutes, // 出行时长（分钟）
+            distance: distanceInKm, // 出行距离（公里）
+            cost: cost // 金钱成本
         });
     } catch (error) {
         console.error("请求错误:", error);
