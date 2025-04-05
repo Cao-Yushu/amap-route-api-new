@@ -46,7 +46,7 @@ app.get('/api/route', async (req, res) => {
         } else if (mode === 'transit') {
             distance = parseFloat(data.route.transits[0].distance);
             duration = parseFloat(data.route.transits[0].duration);
-            cost = parseFloat(data.route.transit_fee) || 0;
+            cost = parseFloat(data.route.cost) || 0;
         } else if (mode === 'walking' || mode === 'bicycling') {
             distance = parseFloat(data.route.paths[0].distance);
             duration = parseFloat(data.route.paths[0].duration);
