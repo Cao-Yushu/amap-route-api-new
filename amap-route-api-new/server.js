@@ -11,19 +11,19 @@ app.get('/api/route', async (req, res) => {
     let url;
     if (mode === 'transit') {
         // 公交路线规划，城市编码设置为0755（深圳）
-        url = `https://restapi.amap.com/v5/direction/transit/integrated?origin=${origin}&destination=${destination}&key=${amapKey}&city1=0755&city2=0755&show_fields=transit_fee,duration,distance`;
+        url = `https://restapi.amap.com/v5/direction/transit/integrated?origin=${origin}&destination=${destination}&key=${amapKey}&city1=0755&city2=0755&show_fields=transit_fee,duration`;
     } else if (mode === 'driving') {
         // 驾车路线规划
-        url = `https://restapi.amap.com/v5/direction/${mode}?origin=${origin}&destination=${destination}&key=${amapKey}&show_fields=duration,distance,tolls`;
+        url = `https://restapi.amap.com/v5/direction/${mode}?origin=${origin}&destination=${destination}&key=${amapKey}&show_fields=duration,tolls`;
     } else if (mode === 'walking') {
         // 步行路线规划
-        url = `https://restapi.amap.com/v5/direction/${mode}?origin=${origin}&destination=${destination}&key=${amapKey}&show_fields=duration,distance`;
+        url = `https://restapi.amap.com/v5/direction/${mode}?origin=${origin}&destination=${destination}&key=${amapKey}&show_fields=duration`;
     } else if (mode === 'bicycling') {
         // 骑行路线规划
-        url = `https://restapi.amap.com/v5/direction/bicycling?origin=${origin}&destination=${destination}&key=${amapKey}&show_fields=duration,distance`;
+        url = `https://restapi.amap.com/v5/direction/bicycling?origin=${origin}&destination=${destination}&key=${amapKey}&show_fields=duration`;
     } else if (mode === 'electrobike') {
         // 电动车路线规划
-        url = `https://restapi.amap.com/v5/direction/electrobike?origin=${origin}&destination=${destination}&key=${amapKey}&show_fields=duration,distance`;
+        url = `https://restapi.amap.com/v5/direction/electrobike?origin=${origin}&destination=${destination}&key=${amapKey}&show_fields=duration`;
     } else {
         return res.status(400).json({ status: "0", info: "无效的出行方式" });
     }
@@ -58,10 +58,6 @@ app.get('/api/route', async (req, res) => {
         } else if (mode === 'bicycling' || mode === 'electrobike') {
             distance = parseFloat(data.route.paths[0].distance); // 获取出行距离（米）并转换为数字
             duration = parseFloat(data.route.paths[0].duration); // 将字符串转换为数字
-            if (mode === 'electrobike') {
-                const costPerKm = 0.02; // 电动车每公里成本
-                cost = (distance / 1000) * costPerKm; // 计算总成本
-            }
         }
 
         // 转换单位
