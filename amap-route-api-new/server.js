@@ -27,6 +27,11 @@ app.get('/api/route', async (req, res) => {
         const response = await axios.get(url);
         const data = response.data;
 
+        // 检查 API 返回状态
+        if (data.status === '0') {
+            return res.status(400).json({ status: "0", info: data.info });
+        }
+
         // 计算金钱成本
         let cost = 0;
         if (mode === 'driving') {
