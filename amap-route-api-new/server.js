@@ -42,22 +42,27 @@ app.get('/api/route', async (req, res) => {
             const tolls = data.route.tolls || 0; // 获取收费
             const costPerKm = 1; // 假设每公里的成本（可以根据实际情况调整）
             cost = (distance / 1000) * costPerKm + tolls; // 计算总成本
-            duration = data.route.paths[0].duration; // 获取出行时长（秒）
+            duration = parseFloat(data.route.paths[0].duration); // 将字符串转换为数字
         } else if (mode === 'transit') {
             cost = data.route.transit_fee; // 公交费用
             distance = data.route.transits[0].distance; // 获取出行距离（米）
-            duration = data.route.transits[0].duration; // 获取出行时长（秒）
+            duration = parseFloat(data.route.transits[0].duration); // 将字符串转换为数字
         } else if (mode === 'walking') {
             distance = data.route.paths[0].distance; // 获取出行距离（米）
-            duration = data.route.paths[0].duration; // 获取出行时长（秒）
+            duration = parseFloat(data.route.paths[0].duration); // 将字符串转换为数字
         } else {
             distance = data.route.paths[0].distance; // 获取出行距离（米）
-            duration = data.route.paths[0].duration; // 获取出行时长（秒）
+            duration = parseFloat(data.route.paths[0].duration); // 将字符串转换为数字
         }
 
         // 转换单位
         const distanceInKm = (distance / 1000).toFixed(2); // 转换为公里
         const durationInMinutes = (duration / 60).toFixed(2); // 转换为分钟
+
+        // 检查 duration 是否有效
+        if (isNaN(durationInMinutes)) {
+            durationInMinutes = 0; // 如果无效，设置为0
+        }
 
         res.json({
             duration: durationInMinutes, // 出行时长（分钟）
