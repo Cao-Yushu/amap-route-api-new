@@ -108,8 +108,39 @@ app.get('/api/route', async (req, res) => {
                         }
                     }))
                 };
+            } else if (mode === 'walking') {
+                // 处理步行路线数据
+                const path = response.data.route.paths[0];
+                const distanceInKm = parseInt(path.distance) / 1000;
+                
+                result.route_info = {
+                    duration: {
+                        value: parseInt(path.duration),
+                        text: `${Math.floor(path.duration / 60)}分钟`
+                    },
+                    distance: {
+                        value: parseInt(path.distance),
+                        text: `${distanceInKm.toFixed(2)}公里`
+                    },
+                    cost: {
+                        calorie: parseFloat((distanceInKm * 65).toFixed(2)), // 假设每公里消耗65卡路里
+                        total: 0,
+                        cost_detail: `消耗卡路里: ${(distanceInKm * 65).toFixed(2)}卡`
+                    },
+                    steps: path.steps.map(step => ({
+                        instruction: step.instruction,
+                        road: step.road || '',
+                        distance: {
+                            value: parseInt(step.distance),
+                            text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
+                        },
+                        duration: {
+                            value: parseInt(step.duration || 0),
+                            text: `${Math.floor((parseInt(step.duration || 0)) / 60)}分钟`
+                        }
+                    }))
+                };
             }
-            // TODO: 其他出行方式的数据处理将在后续添加
         }
 
         res.json(result);
