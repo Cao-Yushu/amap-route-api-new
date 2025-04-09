@@ -20,7 +20,7 @@ const DRIVING_COST_CONSTANTS = {
 const EBIKE_CONSTANTS = {
     SPEED_MULTIPLIER: 1.5,  // 相对于普通自行车的速度倍数
     COST_PER_KM: 0.1,      // 每公里成本（元/公里）
-    CALORIE_PER_KM: 20     // 每公里消耗卡路里（由于有电助力，消耗降低）
+    CALORIE_PER_KM: 0      // 电动自行车不计算卡路里消耗
 };
 
 app.get('/api/route', async (req, res) => {
@@ -78,13 +78,18 @@ app.get('/api/route', async (req, res) => {
                     const duration = mode === 'ebike' 
                         ? Math.floor(originalDuration / EBIKE_CONSTANTS.SPEED_MULTIPLIER)
                         : originalDuration;
-                    
-                    const caloriesPerKm = mode === 'ebike' ? EBIKE_CONSTANTS.CALORIE_PER_KM : 40;
-                    const calories = parseFloat((distanceInKm * caloriesPerKm).toFixed(2));
-                    
-                    const costDetail = mode === 'ebike'
-                        ? `电费和损耗: ${(distanceInKm * EBIKE_CONSTANTS.COST_PER_KM).toFixed(2)}元, 消耗卡路里: ${calories}卡`
-                        : `消耗卡路里: ${calories}卡`;
+
+                    let costDetail;
+                    let totalCost = 0;
+                    let calories = 0;
+
+                    if (mode === 'ebike') {
+                        totalCost = parseFloat((distanceInKm * EBIKE_CONSTANTS.COST_PER_KM).toFixed(2));
+                        costDetail = `电费和损耗: ${totalCost}元`;
+                    } else {
+                        calories = parseFloat((distanceInKm * 40).toFixed(2));
+                        costDetail = `消耗卡路里: ${calories}卡`;
+                    }
 
                     result.route_info = {
                         duration: {
@@ -97,7 +102,7 @@ app.get('/api/route', async (req, res) => {
                         },
                         cost: {
                             calorie: calories,
-                            total: mode === 'ebike' ? parseFloat((distanceInKm * EBIKE_CONSTANTS.COST_PER_KM).toFixed(2)) : 0,
+                            total: totalCost,
                             cost_detail: costDetail
                         }
                     };
