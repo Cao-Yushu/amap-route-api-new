@@ -55,7 +55,8 @@ app.get('/api/route', async (req, res) => {
 
     try {
         const response = await axios.get(url);
-        
+        console.log('API Response:', JSON.stringify(response.data, null, 2)); // 添加日志
+
         const result = {
             status: response.data.status,
             info: response.data.info,
@@ -202,36 +203,30 @@ app.get('/api/route', async (req, res) => {
                 // 处理骑行路线数据
                 if (response.data.route && response.data.route.paths && response.data.route.paths.length > 0) {
                     const path = response.data.route.paths[0];
-                    // 计算总距离和时间
-                    let totalDistance = 0;
-                    let totalDuration = 0;
-                    
-                    // 从steps中累加距离和时间
-                    path.steps.forEach(step => {
-                        totalDistance += parseInt(step.distance) || 0;
-                        totalDuration += parseInt(step.duration) || 0;
-                    });
-
-                    const distanceInKm = totalDistance / 1000;
+                    const distanceInKm = parseInt(path.distance) / 1000;
                     
                     result.route_info = {
                         duration: {
-                            value: totalDuration,
-                            text: `${Math.floor(totalDuration / 60)}分钟`
+                            value: parseInt(path.duration),
+                            text: `${Math.floor(path.duration / 60)}分钟`
                         },
                         distance: {
-                            value: totalDistance,
+                            value: parseInt(path.distance),
                             text: `${distanceInKm.toFixed(2)}公里`
                         },
                         cost: {
                             calorie: parseFloat((distanceInKm * 40).toFixed(2)),
                             total: 0,
                             cost_detail: `消耗卡路里: ${(distanceInKm * 40).toFixed(2)}卡`
-                        },
-                        steps: path.steps.map(step => ({
-                            instruction: step.instruction,
+                        }
+                    };
+
+                    // 添加路段信息
+                    if (path.steps && Array.isArray(path.steps)) {
+                        result.route_info.steps = path.steps.map(step => ({
+                            instruction: step.instruction || '',
                             orientation: step.orientation || '',
-                            road_name: step.road_name || step.road || '',
+                            road_name: step.road || '',
                             distance: {
                                 value: parseInt(step.distance) || 0,
                                 text: `${((parseInt(step.distance) || 0) / 1000).toFixed(2)}公里`
@@ -240,8 +235,8 @@ app.get('/api/route', async (req, res) => {
                                 value: parseInt(step.duration) || 0,
                                 text: `${Math.floor((parseInt(step.duration) || 0) / 60)}分钟`
                             }
-                        }))
-                    };
+                        }));
+                    }
                 }
             }
         }
