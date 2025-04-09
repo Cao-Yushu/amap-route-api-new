@@ -24,8 +24,8 @@ app.get('/api/route', async (req, res) => {
     } else if (mode === 'walking') {
         url = `https://restapi.amap.com/v3/direction/walking?origin=${origin}&destination=${destination}&key=${amapKey}`;
     } else if (mode === 'bicycling') {
-        // 注意：骑行API使用的是v5版本
-        url = `https://restapi.amap.com/v5/direction/riding?origin=${origin}&destination=${destination}&key=${amapKey}`;
+        // 使用v4版本的骑行API
+        url = `https://restapi.amap.com/v4/direction/bicycling?origin=${origin}&destination=${destination}&key=${amapKey}`;
     } else {
         return res.status(400).json({ status: "0", info: "无效的出行方式" });
     }
@@ -35,54 +35,52 @@ app.get('/api/route', async (req, res) => {
         
         // 处理API响应数据
         const result = {
-            status: response.data.status || response.data.errcode === "0", // 骑行API使用errcode
-            info: response.data.info || response.data.errmsg || "OK",
+            status: mode === 'bicycling' ? (response.data.errcode === 0 ? "1" : "0") : response.data.status,
+            info: mode === 'bicycling' ? (response.data.errmsg || "OK") : response.data.info,
             type: mode,
             route_info: {}
         };
 
-        if (result.status) {
+        if ((mode === 'bicycling' && response.data.errcode === 0) || 
+            (mode !== 'bicycling' && response.data.status === '1')) {
             if (mode === 'bicycling') {
                 // 处理骑行路线数据
-                const path = response.data.route;
-                if (!path) {
-                    throw new Error('No route data available');
-                }
-
-                const distanceInKm = parseInt(path.distance) / 1000;
-                
-                result.route_info = {
-                    duration: {
-                        value: parseInt(path.duration),
-                        text: `${Math.floor(path.duration / 60)}分钟`
-                    },
-                    distance: {
-                        value: parseInt(path.distance),
-                        text: `${distanceInKm.toFixed(2)}公里`
-                    },
-                    cost: {
-                        calorie: parseFloat((distanceInKm * 40).toFixed(2)), // 假设每公里消耗40卡路里
-                        total: 0,
-                        cost_detail: `消耗卡路里: ${(distanceInKm * 40).toFixed(2)}卡`
-                    }
-                };
-
-                // 如果有详细的路径信息，添加到返回结果中
-                if (path.steps && Array.isArray(path.steps)) {
-                    result.route_info.steps = path.steps.map(step => ({
-                        instruction: step.instruction,
-                        road_name: step.road_name || '',
-                        distance: {
-                            value: parseInt(step.distance),
-                            text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
-                        },
+                const path = response.data.data;
+                if (path && path.paths && path.paths.length > 0) {
+                    const firstPath = path.paths[0];
+                    const distanceInKm = parseInt(firstPath.distance) / 1000;
+                    
+                    result.route_info = {
                         duration: {
-                            value: parseInt(step.duration),
-                            text: `${Math.floor(parseInt(step.duration) / 60)}分钟`
+                            value: parseInt(firstPath.duration),
+                            text: `${Math.floor(firstPath.duration / 60)}分钟`
                         },
-                        orientation: step.orientation || '',
-                        action: step.action || ''
-                    }));
+                        distance: {
+                            value: parseInt(firstPath.distance),
+                            text: `${distanceInKm.toFixed(2)}公里`
+                        },
+                        cost: {
+                            calorie: parseFloat((distanceInKm * 40).toFixed(2)), // 假设每公里消耗40卡路里
+                            total: 0,
+                            cost_detail: `消耗卡路里: ${(distanceInKm * 40).toFixed(2)}卡`
+                        }
+                    };
+
+                    // 添加路段信息
+                    if (firstPath.steps && Array.isArray(firstPath.steps)) {
+                        result.route_info.steps = firstPath.steps.map(step => ({
+                            instruction: step.instruction,
+                            road_name: step.road_name || '',
+                            distance: {
+                                value: parseInt(step.distance),
+                                text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
+                            },
+                            duration: {
+                                value: parseInt(step.duration),
+                                text: `${Math.floor(parseInt(step.duration) / 60)}分钟`
+                            }
+                        }));
+                    }
                 }
             }
             // ... 其他模式的代码保持不变 ...
