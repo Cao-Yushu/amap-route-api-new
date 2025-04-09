@@ -36,7 +36,8 @@ app.get('/api/route', async (req, res) => {
         const result = {
             status: response.data.status,
             info: response.data.info,
-            type: mode
+            type: mode,
+            route_info: {}
         };
 
         if (response.data.status === '1') {
@@ -68,62 +69,44 @@ app.get('/api/route', async (req, res) => {
                     }
                 };
             } else if (mode === 'transit') {
-                // 处理公交路线数据
+                // 获取第一个公交方案
                 const transitData = response.data.route;
-                const firstTransit = transitData.transits[0]; // 获取第一个方案
+                const firstTransit = transitData.transits[0];
+                const distanceInKm = parseInt(firstTransit.distance) / 1000;
 
                 result.route_info = {
-                    origin: transitData.origin,
-                    destination: transitData.destination,
-                    distance: {
-                        value: parseInt(transitData.distance),
-                        text: `${(parseInt(transitData.distance) / 1000).toFixed(2)}公里`
+                    duration: {
+                        value: parseInt(firstTransit.duration),
+                        text: `${Math.floor(firstTransit.duration / 60)}分钟`
                     },
-                    taxi_cost: parseFloat(transitData.taxi_cost),
-                    transit_info: {
-                        cost: parseFloat(firstTransit.cost),
-                        duration: {
-                            value: parseInt(firstTransit.duration),
-                            text: `${Math.floor(firstTransit.duration / 60)}分钟`
-                        },
-                        walking_distance: {
-                            value: parseInt(firstTransit.walking_distance),
-                            text: `${(parseInt(firstTransit.walking_distance) / 1000).toFixed(2)}公里`
-                        },
-                        nightflag: firstTransit.nightflag === "1",
-                        segments: firstTransit.segments.map(segment => ({
-                            walking: segment.walking ? {
-                                distance: {
-                                    value: parseInt(segment.walking.distance),
-                                    text: `${(parseInt(segment.walking.distance) / 1000).toFixed(2)}公里`
-                                },
-                                duration: {
-                                    value: parseInt(segment.walking.duration),
-                                    text: `${Math.floor(segment.walking.duration / 60)}分钟`
-                                },
-                                steps: segment.walking.steps
-                            } : null,
-                            bus: segment.bus ? {
-                                lines: segment.bus.buslines.map(line => ({
-                                    name: line.name,
-                                    type: line.type,
-                                    distance: {
-                                        value: parseInt(line.distance),
-                                        text: `${(parseInt(line.distance) / 1000).toFixed(2)}公里`
-                                    },
-                                    duration: {
-                                        value: parseInt(line.duration),
-                                        text: `${Math.floor(line.duration / 60)}分钟`
-                                    },
-                                    departure: line.departure_stop,
-                                    arrival: line.arrival_stop,
-                                    via_stops: line.via_stops
-                                }))
-                            } : null,
-                            entrance: segment.entrance,
-                            exit: segment.exit
-                        }))
-                    }
+                    distance: {
+                        value: parseInt(firstTransit.distance),
+                        text: `${distanceInKm.toFixed(2)}公里`
+                    },
+                    cost: {
+                        ticket: parseFloat(firstTransit.cost),
+                        walking_distance: parseFloat((firstTransit.walking_distance / 1000).toFixed(2)),
+                        taxi_cost: parseFloat(transitData.taxi_cost),
+                        total: parseFloat(firstTransit.cost),
+                        cost_detail: `票价: ${firstTransit.cost}元, 步行距离: ${(firstTransit.walking_distance / 1000).toFixed(2)}公里, 打车参考: ${transitData.taxi_cost}元`
+                    },
+                    segments: firstTransit.segments.map(segment => ({
+                        type: segment.bus ? 'bus' : 'walking',
+                        distance: segment.bus ? 
+                            parseInt(segment.bus.buslines[0].distance) : 
+                            parseInt(segment.walking.distance),
+                        duration: segment.bus ? 
+                            parseInt(segment.bus.buslines[0].duration) : 
+                            parseInt(segment.walking.duration),
+                        detail: segment.bus ? {
+                            line: segment.bus.buslines[0].name,
+                            departure: segment.bus.buslines[0].departure_stop.name,
+                            arrival: segment.bus.buslines[0].arrival_stop.name,
+                            via_stops: segment.bus.buslines[0].via_stops.length
+                        } : {
+                            steps: segment.walking.steps.map(step => step.instruction)
+                        }
+                    }))
                 };
             }
             // TODO: 其他出行方式的数据处理将在后续添加
