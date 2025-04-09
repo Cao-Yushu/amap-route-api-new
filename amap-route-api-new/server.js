@@ -33,14 +33,17 @@ app.get('/api/route', async (req, res) => {
     // 根据不同的出行方式构建 URL
     let url;
     if (mode === 'transit') {
+        // 公交路线规划
         url = `https://restapi.amap.com/v3/direction/transit/integrated?origin=${origin}&destination=${destination}&city=0755&extensions=all&key=${amapKey}`;
     } else if (mode === 'driving') {
+        // 驾车路线规划
         url = `https://restapi.amap.com/v3/direction/driving?origin=${origin}&destination=${destination}&extensions=all&key=${amapKey}`;
     } else if (mode === 'walking') {
+        // 步行路线规划
         url = `https://restapi.amap.com/v3/direction/walking?origin=${origin}&destination=${destination}&key=${amapKey}`;
     } else if (mode === 'bicycling') {
-        // 使用v4版本的骑行API
-        url = `https://restapi.amap.com/v4/direction/bicycling?origin=${origin}&destination=${destination}&key=${amapKey}`;
+        // 骑行路线规划
+        url = `https://restapi.amap.com/v3/direction/riding?origin=${origin}&destination=${destination}&key=${amapKey}`;
     } else {
         return res.status(400).json({
             status: "0",
@@ -52,55 +55,17 @@ app.get('/api/route', async (req, res) => {
 
     try {
         const response = await axios.get(url);
-        console.log('API Response:', JSON.stringify(response.data, null, 2)); // 添加日志
-
+        
         const result = {
-            status: mode === 'bicycling' ? response.data.errcode : response.data.status,
-            info: mode === 'bicycling' ? response.data.errmsg : response.data.info,
+            status: response.data.status,
+            info: response.data.info,
             type: mode,
             route_info: {}
         };
 
-        if (mode === 'bicycling') {
-            if (response.data.errcode === 0 && response.data.data) {
-                const pathData = response.data.data;
-                const distanceInKm = parseInt(pathData.distance) / 1000;
-                
-                result.route_info = {
-                    duration: {
-                        value: parseInt(pathData.duration),
-                        text: `${Math.floor(pathData.duration / 60)}分钟`
-                    },
-                    distance: {
-                        value: parseInt(pathData.distance),
-                        text: `${distanceInKm.toFixed(2)}公里`
-                    },
-                    cost: {
-                        calorie: parseFloat((distanceInKm * 40).toFixed(2)),
-                        total: 0,
-                        cost_detail: `消耗卡路里: ${(distanceInKm * 40).toFixed(2)}卡`
-                    }
-                };
-
-                if (pathData.paths && pathData.paths.length > 0) {
-                    result.route_info.steps = pathData.paths[0].steps.map(step => ({
-                        instruction: step.instruction,
-                        orientation: step.orientation || '',
-                        road_name: step.road || '',
-                        distance: {
-                            value: parseInt(step.distance),
-                            text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
-                        },
-                        duration: {
-                            value: parseInt(step.duration || 0),
-                            text: `${Math.floor(parseInt(step.duration || 0) / 60)}分钟`
-                        }
-                    }));
-                }
-            }
-        } else if (mode === 'driving') {
-            // 驾车路线处理逻辑保持不变
-            if (response.data.status === '1' && response.data.route.paths && response.data.route.paths.length > 0) {
+        if (response.data.status === '1') {
+            if (mode === 'driving') {
+                // 处理驾车路线数据
                 const path = response.data.route.paths[0];
                 const distanceInKm = parseInt(path.distance) / 1000;
                 const fuelCost = (distanceInKm * DRIVING_COST_CONSTANTS.FUEL_CONSUMPTION * DRIVING_COST_CONSTANTS.FUEL_PRICE) / 100;
@@ -137,44 +102,8 @@ app.get('/api/route', async (req, res) => {
                         }
                     }))
                 };
-            }
-        } else if (mode === 'walking') {
-            // 步行路线处理逻辑保持不变
-            if (response.data.status === '1' && response.data.route.paths && response.data.route.paths.length > 0) {
-                const path = response.data.route.paths[0];
-                const distanceInKm = parseInt(path.distance) / 1000;
-                
-                result.route_info = {
-                    duration: {
-                        value: parseInt(path.duration),
-                        text: `${Math.floor(path.duration / 60)}分钟`
-                    },
-                    distance: {
-                        value: parseInt(path.distance),
-                        text: `${distanceInKm.toFixed(2)}公里`
-                    },
-                    cost: {
-                        calorie: parseFloat((distanceInKm * 65).toFixed(2)),
-                        total: 0,
-                        cost_detail: `消耗卡路里: ${(distanceInKm * 65).toFixed(2)}卡`
-                    },
-                    steps: path.steps.map(step => ({
-                        instruction: step.instruction,
-                        road_name: step.road || '',
-                        distance: {
-                            value: parseInt(step.distance),
-                            text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
-                        },
-                        duration: {
-                            value: parseInt(step.duration),
-                            text: `${Math.floor(parseInt(step.duration) / 60)}分钟`
-                        }
-                    }))
-                };
-            }
-        } else if (mode === 'transit') {
-            // 公交路线处理逻辑保持不变
-            if (response.data.status === '1' && response.data.route.transits && response.data.route.transits.length > 0) {
+            } else if (mode === 'transit') {
+                // 处理公交路线数据
                 const transit = response.data.route.transits[0];
                 result.route_info = {
                     duration: {
@@ -237,6 +166,83 @@ app.get('/api/route', async (req, res) => {
                         return segmentInfo;
                     })
                 };
+            } else if (mode === 'walking') {
+                // 处理步行路线数据
+                const path = response.data.route.paths[0];
+                const distanceInKm = parseInt(path.distance) / 1000;
+                
+                result.route_info = {
+                    duration: {
+                        value: parseInt(path.duration),
+                        text: `${Math.floor(path.duration / 60)}分钟`
+                    },
+                    distance: {
+                        value: parseInt(path.distance),
+                        text: `${distanceInKm.toFixed(2)}公里`
+                    },
+                    cost: {
+                        calorie: parseFloat((distanceInKm * 65).toFixed(2)),
+                        total: 0,
+                        cost_detail: `消耗卡路里: ${(distanceInKm * 65).toFixed(2)}卡`
+                    },
+                    steps: path.steps.map(step => ({
+                        instruction: step.instruction,
+                        road_name: step.road || '',
+                        distance: {
+                            value: parseInt(step.distance),
+                            text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
+                        },
+                        duration: {
+                            value: parseInt(step.duration),
+                            text: `${Math.floor(parseInt(step.duration) / 60)}分钟`
+                        }
+                    }))
+                };
+            } else if (mode === 'bicycling') {
+                // 处理骑行路线数据
+                if (response.data.route && response.data.route.paths && response.data.route.paths.length > 0) {
+                    const path = response.data.route.paths[0];
+                    // 计算总距离和时间
+                    let totalDistance = 0;
+                    let totalDuration = 0;
+                    
+                    // 从steps中累加距离和时间
+                    path.steps.forEach(step => {
+                        totalDistance += parseInt(step.distance) || 0;
+                        totalDuration += parseInt(step.duration) || 0;
+                    });
+
+                    const distanceInKm = totalDistance / 1000;
+                    
+                    result.route_info = {
+                        duration: {
+                            value: totalDuration,
+                            text: `${Math.floor(totalDuration / 60)}分钟`
+                        },
+                        distance: {
+                            value: totalDistance,
+                            text: `${distanceInKm.toFixed(2)}公里`
+                        },
+                        cost: {
+                            calorie: parseFloat((distanceInKm * 40).toFixed(2)),
+                            total: 0,
+                            cost_detail: `消耗卡路里: ${(distanceInKm * 40).toFixed(2)}卡`
+                        },
+                        steps: path.steps.map(step => ({
+                            instruction: step.instruction,
+                            orientation: step.orientation || '',
+                            road_name: step.road_name || step.road || '',
+                            distance: {
+                                value: parseInt(step.distance) || 0,
+                                text: `${((parseInt(step.distance) || 0) / 1000).toFixed(2)}公里`
+                            },
+                            duration: {
+                                value: parseInt(step.duration) || 0,
+                                text: `${Math.floor((parseInt(step.duration) || 0) / 60)}分钟`
+                            }
+                        }))
+                    };
+                }
             }
         }
 
