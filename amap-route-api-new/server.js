@@ -3,6 +3,13 @@ const axios = require('axios');
 const app = express();
 const port = process.env.PORT || 3000;
 
+// 定义私家车成本常量
+const DRIVING_COST_CONSTANTS = {
+    FUEL_PRICE: 7.79,  // 假设当前汽油价格（元/升）
+    FUEL_CONSUMPTION: 8.0,  // 假设百公里油耗（升/100公里）
+    DEPRECIATION_PER_KM: 0.5,  // 假设每公里折旧成本（元/公里）
+};
+
 app.get('/api/route', async (req, res) => {
     const { origin, destination, mode } = req.query;
     const amapKey = process.env.AMAP_API_KEY;
@@ -35,6 +42,14 @@ app.get('/api/route', async (req, res) => {
         if (response.data.status === '1') {
             if (mode === 'driving') {
                 const path = response.data.route.paths[0];
+                const distanceInKm = parseInt(path.distance) / 1000;
+                
+                // 计算行驶成本
+                const fuelCost = (distanceInKm * DRIVING_COST_CONSTANTS.FUEL_CONSUMPTION * DRIVING_COST_CONSTANTS.FUEL_PRICE) / 100;
+                const depreciationCost = distanceInKm * DRIVING_COST_CONSTANTS.DEPRECIATION_PER_KM;
+                const tollCost = parseFloat(path.tolls || 0);
+                const totalCost = fuelCost + depreciationCost + tollCost;
+
                 result.route_info = {
                     duration: {
                         value: parseInt(path.duration),
@@ -45,9 +60,11 @@ app.get('/api/route', async (req, res) => {
                         text: path.distance > 1000 ? `${(path.distance / 1000).toFixed(1)}公里` : `${path.distance}米`
                     },
                     cost: {
-                        taxi: parseFloat(response.data.route.taxi_cost || 0),
-                        toll: parseFloat(path.tolls || 0),
-                        total: parseFloat(response.data.route.taxi_cost || 0) + parseFloat(path.tolls || 0)
+                        fuel: parseFloat(fuelCost.toFixed(2)),
+                        depreciation: parseFloat(depreciationCost.toFixed(2)),
+                        toll: tollCost,
+                        total: parseFloat(totalCost.toFixed(2)),
+                        cost_detail: `油费: ${fuelCost.toFixed(2)}元, 折旧: ${depreciationCost.toFixed(2)}元, 过路费: ${tollCost}元`
                     }
                 };
             }
