@@ -132,11 +132,141 @@ app.get('/api/route', async (req, res) => {
                     }
                 }
             } else if (mode === 'driving') {
-                // ... 驾车路线处理代码保持不变 ...
+                // 处理驾车路线数据
+                const path = response.data.route.paths[0];
+                const distanceInKm = parseInt(path.distance) / 1000;
+                const fuelCost = (distanceInKm * DRIVING_COST_CONSTANTS.FUEL_CONSUMPTION * DRIVING_COST_CONSTANTS.FUEL_PRICE) / 100;
+                const depreciationCost = distanceInKm * DRIVING_COST_CONSTANTS.DEPRECIATION_PER_KM;
+                const tollCost = path.tolls ? parseFloat(path.tolls) : 0;
+                const totalCost = fuelCost + depreciationCost + tollCost;
+
+                result.route_info = {
+                    duration: {
+                        value: parseInt(path.duration),
+                        text: `${Math.floor(path.duration / 60)}分钟`
+                    },
+                    distance: {
+                        value: parseInt(path.distance),
+                        text: `${distanceInKm.toFixed(2)}公里`
+                    },
+                    cost: {
+                        fuel: parseFloat(fuelCost.toFixed(2)),
+                        depreciation: parseFloat(depreciationCost.toFixed(2)),
+                        toll: tollCost,
+                        total: parseFloat(totalCost.toFixed(2)),
+                        cost_detail: `油费: ${fuelCost.toFixed(2)}元, 折旧: ${depreciationCost.toFixed(2)}元${tollCost > 0 ? `, 过路费: ${tollCost}元` : ''}`
+                    },
+                    steps: path.steps.map(step => ({
+                        instruction: step.instruction,
+                        road_name: step.road_name || '',
+                        distance: {
+                            value: parseInt(step.distance),
+                            text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
+                        },
+                        duration: {
+                            value: parseInt(step.duration),
+                            text: `${Math.floor(parseInt(step.duration) / 60)}分钟`
+                        }
+                    }))
+                };
             } else if (mode === 'transit') {
-                // ... 公交路线处理代码保持不变 ...
+                // 处理公交路线数据
+                if (response.data.route && response.data.route.transits && response.data.route.transits.length > 0) {
+                    const transit = response.data.route.transits[0];
+                    result.route_info = {
+                        duration: {
+                            value: parseInt(transit.duration),
+                            text: `${Math.floor(transit.duration / 60)}分钟`
+                        },
+                        distance: {
+                            value: parseInt(transit.distance),
+                            text: `${(parseInt(transit.distance) / 1000).toFixed(2)}公里`
+                        },
+                        cost: {
+                            total: parseFloat(transit.cost),
+                            walking_distance: parseInt(transit.walking_distance),
+                            cost_detail: `票价: ${transit.cost}元, 步行距离: ${(transit.walking_distance / 1000).toFixed(2)}公里`
+                        },
+                        segments: transit.segments.map(segment => {
+                            let segmentInfo = {
+                                instruction: '',
+                                distance: {
+                                    value: 0,
+                                    text: ''
+                                },
+                                duration: {
+                                    value: 0,
+                                    text: ''
+                                }
+                            };
+
+                            if (segment.walking) {
+                                segmentInfo = {
+                                    type: 'walking',
+                                    instruction: `步行${(segment.walking.distance / 1000).toFixed(2)}公里`,
+                                    distance: {
+                                        value: segment.walking.distance,
+                                        text: `${(segment.walking.distance / 1000).toFixed(2)}公里`
+                                    },
+                                    duration: {
+                                        value: segment.walking.duration,
+                                        text: `${Math.floor(segment.walking.duration / 60)}分钟`
+                                    }
+                                };
+                            } else if (segment.bus) {
+                                segmentInfo = {
+                                    type: 'bus',
+                                    instruction: `乘坐${segment.bus.buslines[0].name}`,
+                                    distance: {
+                                        value: segment.bus.buslines[0].distance,
+                                        text: `${(segment.bus.buslines[0].distance / 1000).toFixed(2)}公里`
+                                    },
+                                    duration: {
+                                        value: segment.bus.buslines[0].duration,
+                                        text: `${Math.floor(segment.bus.buslines[0].duration / 60)}分钟`
+                                    },
+                                    start_stop: segment.bus.buslines[0].departure_stop.name,
+                                    end_stop: segment.bus.buslines[0].arrival_stop.name,
+                                    cost: segment.bus.buslines[0].total_price || 0
+                                };
+                            }
+
+                            return segmentInfo;
+                        })
+                    };
+                }
             } else if (mode === 'walking') {
-                // ... 步行路线处理代码保持不变 ...
+                // 处理步行路线数据
+                const path = response.data.route.paths[0];
+                const distanceInKm = parseInt(path.distance) / 1000;
+                
+                result.route_info = {
+                    duration: {
+                        value: parseInt(path.duration),
+                        text: `${Math.floor(path.duration / 60)}分钟`
+                    },
+                    distance: {
+                        value: parseInt(path.distance),
+                        text: `${distanceInKm.toFixed(2)}公里`
+                    },
+                    cost: {
+                        calorie: parseFloat((distanceInKm * 65).toFixed(2)),
+                        total: 0,
+                        cost_detail: `消耗卡路里: ${(distanceInKm * 65).toFixed(2)}卡`
+                    },
+                    steps: path.steps.map(step => ({
+                        instruction: step.instruction,
+                        road_name: step.road || '',
+                        distance: {
+                            value: parseInt(step.distance),
+                            text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
+                        },
+                        duration: {
+                            value: parseInt(step.duration),
+                            text: `${Math.floor(parseInt(step.duration) / 60)}分钟`
+                        }
+                    }))
+                };
             }
         }
 
