@@ -1,17 +1,16 @@
 {
   "name": "amap-route-api",
   "version": "1.0.0",
-  "description": "Route planning API using AMap",
-  "main": "app.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node app.js"
-  },
-  "engines": {
-    "node": "18.x"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "axios": "^1.6.2",
     "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": "18.x"
   }
 }
