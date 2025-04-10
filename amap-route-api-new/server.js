@@ -8,9 +8,27 @@ const port = process.env.PORT || 3000;
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    exposedHeaders: ['Content-Type'],
     credentials: true
 }));
+
+// 添加中间件来设置响应头
+app.use((req, res, next) => {
+    res.header('Content-Type', 'application/json; charset=utf-8');
+    next();
+});
+
+// 添加请求日志中间件
+app.use((req, res, next) => {
+    console.log('收到请求:', {
+        method: req.method,
+        url: req.url,
+        headers: req.headers,
+        query: req.query
+    });
+    next();
+});
 
 // 定义私家车成本常量
 const DRIVING_COST_CONSTANTS = {
@@ -28,7 +46,8 @@ const EBIKE_CONSTANTS = {
 
 // 健康检查端点
 app.get('/', (req, res) => {
-    res.json({ status: 'ok', message: 'Service is running' });
+    res.header('Content-Type', 'application/json; charset=utf-8')
+       .json({ status: 'ok', message: 'Service is running' });
 });
 
 app.get('/api/route', async (req, res) => {
@@ -37,12 +56,14 @@ app.get('/api/route', async (req, res) => {
 
     // 参数验证
     if (!origin || !destination || !mode) {
-        return res.status(400).json({
-            status: "0",
-            info: "缺少必要参数",
-            type: mode || "unknown",
-            route_info: {}
-        });
+        return res.status(400)
+                  .header('Content-Type', 'application/json; charset=utf-8')
+                  .json({
+                      status: "0",
+                      info: "缺少必要参数",
+                      type: mode || "unknown",
+                      route_info: {}
+                  });
     }
 
     try {
@@ -57,12 +78,14 @@ app.get('/api/route', async (req, res) => {
         } else if (mode === 'walking') {
             url = `https://restapi.amap.com/v3/direction/walking?origin=${origin}&destination=${destination}&key=${amapKey}`;
         } else {
-            return res.status(400).json({
-                status: "0",
-                info: "无效的出行方式",
-                type: mode,
-                route_info: {}
-            });
+            return res.status(400)
+                      .header('Content-Type', 'application/json; charset=utf-8')
+                      .json({
+                          status: "0",
+                          info: "无效的出行方式",
+                          type: mode,
+                          route_info: {}
+                      });
         }
 
         console.log('请求高德API:', url);
@@ -83,7 +106,6 @@ app.get('/api/route', async (req, res) => {
                     const path = paths[0];
                     const distanceInKm = parseInt(path.distance) / 1000;
                     
-                    // 根据不同模式计算时间和成本
                     const originalDuration = parseInt(path.duration);
                     const duration = mode === 'ebike' 
                         ? Math.floor(originalDuration / EBIKE_CONSTANTS.SPEED_MULTIPLIER)
@@ -156,19 +178,7 @@ app.get('/api/route', async (req, res) => {
                         toll: tollCost,
                         total: parseFloat(totalCost.toFixed(2)),
                         cost_detail: `油费: ${fuelCost.toFixed(2)}元, 折旧: ${depreciationCost.toFixed(2)}元${tollCost > 0 ? `, 过路费: ${tollCost}元` : ''}`
-                    },
-                    steps: path.steps.map(step => ({
-                        instruction: step.instruction,
-                        road_name: step.road_name || '',
-                        distance: {
-                            value: parseInt(step.distance),
-                            text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
-                        },
-                        duration: {
-                            value: parseInt(step.duration),
-                            text: `${Math.floor(parseInt(step.duration) / 60)}分钟`
-                        }
-                    }))
+                    }
                 };
             } else if (mode === 'transit') {
                 if (response.data.route && response.data.route.transits && response.data.route.transits.length > 0) {
@@ -186,53 +196,7 @@ app.get('/api/route', async (req, res) => {
                             total: parseFloat(transit.cost),
                             walking_distance: parseInt(transit.walking_distance),
                             cost_detail: `票价: ${transit.cost}元, 步行距离: ${(transit.walking_distance / 1000).toFixed(2)}公里`
-                        },
-                        segments: transit.segments.map(segment => {
-                            let segmentInfo = {
-                                instruction: '',
-                                distance: {
-                                    value: 0,
-                                    text: ''
-                                },
-                                duration: {
-                                    value: 0,
-                                    text: ''
-                                }
-                            };
-
-                            if (segment.walking) {
-                                segmentInfo = {
-                                    type: 'walking',
-                                    instruction: `步行${(segment.walking.distance / 1000).toFixed(2)}公里`,
-                                    distance: {
-                                        value: segment.walking.distance,
-                                        text: `${(segment.walking.distance / 1000).toFixed(2)}公里`
-                                    },
-                                    duration: {
-                                        value: segment.walking.duration,
-                                        text: `${Math.floor(segment.walking.duration / 60)}分钟`
-                                    }
-                                };
-                            } else if (segment.bus) {
-                                segmentInfo = {
-                                    type: 'bus',
-                                    instruction: `乘坐${segment.bus.buslines[0].name}`,
-                                    distance: {
-                                        value: segment.bus.buslines[0].distance,
-                                        text: `${(segment.bus.buslines[0].distance / 1000).toFixed(2)}公里`
-                                    },
-                                    duration: {
-                                        value: segment.bus.buslines[0].duration,
-                                        text: `${Math.floor(segment.bus.buslines[0].duration / 60)}分钟`
-                                    },
-                                    start_stop: segment.bus.buslines[0].departure_stop.name,
-                                    end_stop: segment.bus.buslines[0].arrival_stop.name,
-                                    cost: segment.bus.buslines[0].total_price || 0
-                                };
-                            }
-
-                            return segmentInfo;
-                        })
+                        }
                     };
                 }
             } else if (mode === 'walking') {
@@ -252,45 +216,44 @@ app.get('/api/route', async (req, res) => {
                         calorie: parseFloat((distanceInKm * 65).toFixed(2)),
                         total: 0,
                         cost_detail: `消耗卡路里: ${(distanceInKm * 65).toFixed(2)}卡`
-                    },
-                    steps: path.steps.map(step => ({
-                        instruction: step.instruction,
-                        road_name: step.road || '',
-                        distance: {
-                            value: parseInt(step.distance),
-                            text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
-                        },
-                        duration: {
-                            value: parseInt(step.duration),
-                            text: `${Math.floor(parseInt(step.duration) / 60)}分钟`
-                        }
-                    }))
+                    }
                 };
             }
         }
 
-        res.json(result);
+        res.header('Content-Type', 'application/json; charset=utf-8')
+           .json(result);
     } catch (error) {
         console.error("请求错误:", error);
-        res.status(500).json({
-            status: "0",
-            info: error.message || "请求失败",
-            type: mode,
-            route_info: {}
-        });
+        res.status(500)
+           .header('Content-Type', 'application/json; charset=utf-8')
+           .json({
+                status: "0",
+                info: error.message || "请求失败",
+                type: mode,
+                route_info: {}
+            });
     }
 });
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({
-        status: "0",
-        info: "服务器内部错误",
-        error: err.message
-    });
+    console.error("服务器错误:", err);
+    res.status(500)
+       .header('Content-Type', 'application/json; charset=utf-8')
+       .json({
+            status: "0",
+            info: "服务器内部错误",
+            error: err.message,
+            type: req.query.mode || "unknown",
+            route_info: {}
+        });
 });
 
 app.listen(port, () => {
     console.log(`服务器正在运行在 http://localhost:${port}`);
+    console.log('环境变量:', {
+        NODE_ENV: process.env.NODE_ENV,
+        AMAP_API_KEY: process.env.AMAP_API_KEY ? '已设置' : '未设置'
+    });
 });
