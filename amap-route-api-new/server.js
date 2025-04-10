@@ -49,21 +49,32 @@ const EBIKE_CONSTANTS = {
 
 // 健康检查端点
 app.get('/', (req, res) => {
-    res.json({ status: 'ok', message: 'Service is running' });
+    const { callback } = req.query;
+    const response = { status: 'ok', message: 'Service is running' };
+    
+    if (callback) {
+        res.set('Content-Type', 'application/javascript');
+        res.send(`${callback}(${JSON.stringify(response)})`);
+    } else {
+        res.json(response);
+    }
 });
 
 app.get('/api/route', async (req, res) => {
-    const { origin, destination, mode } = req.query;
+    const { origin, destination, mode, callback } = req.query;
     const amapKey = process.env.AMAP_API_KEY;
 
     // 参数验证
     if (!origin || !destination || !mode) {
-        return res.status(400).json({
+        const error = {
             status: "0",
             info: "缺少必要参数",
             type: mode || "unknown",
             route_info: {}
-        });
+        };
+        return callback ? 
+            res.set('Content-Type', 'application/javascript').send(`${callback}(${JSON.stringify(error)})`) : 
+            res.json(error);
     }
 
     try {
@@ -78,12 +89,15 @@ app.get('/api/route', async (req, res) => {
         } else if (mode === 'walking') {
             url = `https://restapi.amap.com/v3/direction/walking?origin=${origin}&destination=${destination}&key=${amapKey}`;
         } else {
-            return res.status(400).json({
+            const error = {
                 status: "0",
                 info: "无效的出行方式",
                 type: mode,
                 route_info: {}
-            });
+            };
+            return callback ? 
+                res.set('Content-Type', 'application/javascript').send(`${callback}(${JSON.stringify(error)})`) : 
+                res.json(error);
         }
 
         console.log('请求高德API:', url);
@@ -203,28 +217,49 @@ app.get('/api/route', async (req, res) => {
             }
         }
 
-        res.json(result);
+        // 根据请求类型返回相应格式的响应
+        if (callback) {
+            res.set('Content-Type', 'application/javascript');
+            res.send(`${callback}(${JSON.stringify(result)})`);
+        } else {
+            res.json(result);
+        }
     } catch (error) {
         console.error("请求错误:", error);
-        res.status(500).json({
+        const errorResponse = {
             status: "0",
             info: error.message || "请求失败",
             type: mode,
             route_info: {}
-        });
+        };
+        
+        if (callback) {
+            res.set('Content-Type', 'application/javascript');
+            res.send(`${callback}(${JSON.stringify(errorResponse)})`);
+        } else {
+            res.status(500).json(errorResponse);
+        }
     }
 });
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
     console.error("服务器错误:", err);
-    res.status(500).json({
+    const errorResponse = {
         status: "0",
         info: "服务器内部错误",
         error: err.message,
         type: req.query.mode || "unknown",
         route_info: {}
-    });
+    };
+
+    const { callback } = req.query;
+    if (callback) {
+        res.set('Content-Type', 'application/javascript');
+        res.send(`${callback}(${JSON.stringify(errorResponse)})`);
+    } else {
+        res.status(500).json(errorResponse);
+    }
 });
 
 // 启动服务器
