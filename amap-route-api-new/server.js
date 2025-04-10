@@ -1,32 +1,41 @@
 const express = require('express');
 const axios = require('axios');
+const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// 允许跨域请求
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    next();
-});
+// 配置CORS
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}));
 
-// 定义常量
+// 定义私家车成本常量
 const DRIVING_COST_CONSTANTS = {
     FUEL_PRICE: 7.79,  // 当前汽油价格（元/升）
     FUEL_CONSUMPTION: 8.0,  // 百公里油耗（升/100公里）
     DEPRECIATION_PER_KM: 0.5,  // 每公里折旧成本（元/公里）
 };
 
+// 定义电动自行车常量
 const EBIKE_CONSTANTS = {
     SPEED_MULTIPLIER: 1.5,  // 相对于普通自行车的速度倍数
     COST_PER_KM: 0.1,      // 每公里成本（元/公里）
     CALORIE_PER_KM: 0      // 电动自行车不计算卡路里消耗
 };
 
+// 健康检查端点
+app.get('/', (req, res) => {
+    res.json({ status: 'ok', message: 'Service is running' });
+});
+
 app.get('/api/route', async (req, res) => {
     const { origin, destination, mode } = req.query;
     const amapKey = process.env.AMAP_API_KEY;
 
+    // 参数验证
     if (!origin || !destination || !mode) {
         return res.status(400).json({
             status: "0",
@@ -38,7 +47,7 @@ app.get('/api/route', async (req, res) => {
 
     try {
         let url;
-        // 电动自行车模式也使用骑行的API
+        // 根据不同的出行方式构建 URL
         if (mode === 'ebike' || mode === 'bicycling') {
             url = `https://restapi.amap.com/v3/direction/riding?origin=${origin}&destination=${destination}&key=${amapKey}`;
         } else if (mode === 'transit') {
@@ -56,8 +65,9 @@ app.get('/api/route', async (req, res) => {
             });
         }
 
+        console.log('请求高德API:', url);
         const response = await axios.get(url);
-        console.log('API Response:', JSON.stringify(response.data, null, 2));
+        console.log('高德API响应:', JSON.stringify(response.data, null, 2));
 
         const result = {
             status: response.data.status,
@@ -108,31 +118,22 @@ app.get('/api/route', async (req, res) => {
                     };
 
                     if (path.steps) {
-                        result.route_info.steps = path.steps.map(step => {
-                            const stepDistance = parseInt(step.distance) || 0;
-                            const stepDuration = parseInt(step.duration) || 0;
-                            const adjustedDuration = mode === 'ebike' 
-                                ? Math.floor(stepDuration / EBIKE_CONSTANTS.SPEED_MULTIPLIER)
-                                : stepDuration;
-
-                            return {
-                                instruction: step.instruction || '',
-                                orientation: step.orientation || '',
-                                road_name: step.road || '',
-                                distance: {
-                                    value: stepDistance,
-                                    text: `${(stepDistance / 1000).toFixed(2)}公里`
-                                },
-                                duration: {
-                                    value: adjustedDuration,
-                                    text: `${Math.floor(adjustedDuration / 60)}分钟`
-                                }
-                            };
-                        });
+                        result.route_info.steps = path.steps.map(step => ({
+                            instruction: step.instruction || '',
+                            orientation: step.orientation || '',
+                            road_name: step.road || '',
+                            distance: {
+                                value: parseInt(step.distance),
+                                text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
+                            },
+                            duration: {
+                                value: mode === 'ebike' ? Math.floor(parseInt(step.duration) / EBIKE_CONSTANTS.SPEED_MULTIPLIER) : parseInt(step.duration),
+                                text: `${Math.floor(parseInt(step.duration) / 60)}分钟`
+                            }
+                        }));
                     }
                 }
             } else if (mode === 'driving') {
-                // 处理驾车路线数据
                 const path = response.data.route.paths[0];
                 const distanceInKm = parseInt(path.distance) / 1000;
                 const fuelCost = (distanceInKm * DRIVING_COST_CONSTANTS.FUEL_CONSUMPTION * DRIVING_COST_CONSTANTS.FUEL_PRICE) / 100;
@@ -170,7 +171,6 @@ app.get('/api/route', async (req, res) => {
                     }))
                 };
             } else if (mode === 'transit') {
-                // 处理公交路线数据
                 if (response.data.route && response.data.route.transits && response.data.route.transits.length > 0) {
                     const transit = response.data.route.transits[0];
                     result.route_info = {
@@ -236,7 +236,6 @@ app.get('/api/route', async (req, res) => {
                     };
                 }
             } else if (mode === 'walking') {
-                // 处理步行路线数据
                 const path = response.data.route.paths[0];
                 const distanceInKm = parseInt(path.distance) / 1000;
                 
@@ -280,6 +279,16 @@ app.get('/api/route', async (req, res) => {
             route_info: {}
         });
     }
+});
+
+// 错误处理中间件
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        status: "0",
+        info: "服务器内部错误",
+        error: err.message
+    });
 });
 
 app.listen(port, () => {
