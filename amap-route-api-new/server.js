@@ -4,14 +4,17 @@ const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// 配置CORS
-app.use(cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-    exposedHeaders: ['Content-Type'],
-    credentials: true
-}));
+// CORS配置
+const corsOptions = {
+    origin: ['https://hku.au1.qualtrics.com', 'https://au1.qualtrics.com'],
+    methods: ['GET', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Accept'],
+    credentials: false,
+    maxAge: 86400 // 预检请求的结果可以缓存24小时
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // 添加中间件来设置响应头
 app.use((req, res, next) => {
@@ -46,8 +49,7 @@ const EBIKE_CONSTANTS = {
 
 // 健康检查端点
 app.get('/', (req, res) => {
-    res.header('Content-Type', 'application/json; charset=utf-8')
-       .json({ status: 'ok', message: 'Service is running' });
+    res.json({ status: 'ok', message: 'Service is running' });
 });
 
 app.get('/api/route', async (req, res) => {
@@ -56,14 +58,12 @@ app.get('/api/route', async (req, res) => {
 
     // 参数验证
     if (!origin || !destination || !mode) {
-        return res.status(400)
-                  .header('Content-Type', 'application/json; charset=utf-8')
-                  .json({
-                      status: "0",
-                      info: "缺少必要参数",
-                      type: mode || "unknown",
-                      route_info: {}
-                  });
+        return res.status(400).json({
+            status: "0",
+            info: "缺少必要参数",
+            type: mode || "unknown",
+            route_info: {}
+        });
     }
 
     try {
@@ -78,14 +78,12 @@ app.get('/api/route', async (req, res) => {
         } else if (mode === 'walking') {
             url = `https://restapi.amap.com/v3/direction/walking?origin=${origin}&destination=${destination}&key=${amapKey}`;
         } else {
-            return res.status(400)
-                      .header('Content-Type', 'application/json; charset=utf-8')
-                      .json({
-                          status: "0",
-                          info: "无效的出行方式",
-                          type: mode,
-                          route_info: {}
-                      });
+            return res.status(400).json({
+                status: "0",
+                info: "无效的出行方式",
+                type: mode,
+                route_info: {}
+            });
         }
 
         console.log('请求高德API:', url);
@@ -138,22 +136,6 @@ app.get('/api/route', async (req, res) => {
                             cost_detail: costDetail
                         }
                     };
-
-                    if (path.steps) {
-                        result.route_info.steps = path.steps.map(step => ({
-                            instruction: step.instruction || '',
-                            orientation: step.orientation || '',
-                            road_name: step.road || '',
-                            distance: {
-                                value: parseInt(step.distance),
-                                text: `${(parseInt(step.distance) / 1000).toFixed(2)}公里`
-                            },
-                            duration: {
-                                value: mode === 'ebike' ? Math.floor(parseInt(step.duration) / EBIKE_CONSTANTS.SPEED_MULTIPLIER) : parseInt(step.duration),
-                                text: `${Math.floor(parseInt(step.duration) / 60)}分钟`
-                            }
-                        }));
-                    }
                 }
             } else if (mode === 'driving') {
                 const path = response.data.route.paths[0];
@@ -221,35 +203,31 @@ app.get('/api/route', async (req, res) => {
             }
         }
 
-        res.header('Content-Type', 'application/json; charset=utf-8')
-           .json(result);
+        res.json(result);
     } catch (error) {
         console.error("请求错误:", error);
-        res.status(500)
-           .header('Content-Type', 'application/json; charset=utf-8')
-           .json({
-                status: "0",
-                info: error.message || "请求失败",
-                type: mode,
-                route_info: {}
-            });
+        res.status(500).json({
+            status: "0",
+            info: error.message || "请求失败",
+            type: mode,
+            route_info: {}
+        });
     }
 });
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
     console.error("服务器错误:", err);
-    res.status(500)
-       .header('Content-Type', 'application/json; charset=utf-8')
-       .json({
-            status: "0",
-            info: "服务器内部错误",
-            error: err.message,
-            type: req.query.mode || "unknown",
-            route_info: {}
-        });
+    res.status(500).json({
+        status: "0",
+        info: "服务器内部错误",
+        error: err.message,
+        type: req.query.mode || "unknown",
+        route_info: {}
+    });
 });
 
+// 启动服务器
 app.listen(port, () => {
     console.log(`服务器正在运行在 http://localhost:${port}`);
     console.log('环境变量:', {
