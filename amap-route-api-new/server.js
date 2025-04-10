@@ -18,7 +18,10 @@ app.options('*', cors(corsOptions));
 
 // 添加中间件来设置响应头
 app.use((req, res, next) => {
-    res.header('Content-Type', 'application/json; charset=utf-8');
+    // 允许JSONP请求
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Content-Type', 'application/javascript; charset=utf-8');
     next();
 });
 
@@ -53,7 +56,6 @@ app.get('/', (req, res) => {
     const response = { status: 'ok', message: 'Service is running' };
     
     if (callback) {
-        res.set('Content-Type', 'application/javascript');
         res.send(`${callback}(${JSON.stringify(response)})`);
     } else {
         res.json(response);
@@ -73,7 +75,7 @@ app.get('/api/route', async (req, res) => {
             route_info: {}
         };
         return callback ? 
-            res.set('Content-Type', 'application/javascript').send(`${callback}(${JSON.stringify(error)})`) : 
+            res.send(`${callback}(${JSON.stringify(error)})`) : 
             res.json(error);
     }
 
@@ -96,7 +98,7 @@ app.get('/api/route', async (req, res) => {
                 route_info: {}
             };
             return callback ? 
-                res.set('Content-Type', 'application/javascript').send(`${callback}(${JSON.stringify(error)})`) : 
+                res.send(`${callback}(${JSON.stringify(error)})`) : 
                 res.json(error);
         }
 
@@ -219,7 +221,6 @@ app.get('/api/route', async (req, res) => {
 
         // 根据请求类型返回相应格式的响应
         if (callback) {
-            res.set('Content-Type', 'application/javascript');
             res.send(`${callback}(${JSON.stringify(result)})`);
         } else {
             res.json(result);
@@ -234,7 +235,6 @@ app.get('/api/route', async (req, res) => {
         };
         
         if (callback) {
-            res.set('Content-Type', 'application/javascript');
             res.send(`${callback}(${JSON.stringify(errorResponse)})`);
         } else {
             res.status(500).json(errorResponse);
@@ -255,7 +255,6 @@ app.use((err, req, res, next) => {
 
     const { callback } = req.query;
     if (callback) {
-        res.set('Content-Type', 'application/javascript');
         res.send(`${callback}(${JSON.stringify(errorResponse)})`);
     } else {
         res.status(500).json(errorResponse);
