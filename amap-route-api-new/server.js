@@ -20,27 +20,34 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    res.header('Content-Type', 'application/json; charset=utf-8');
     next();
 });
 
 // 路由处理
 app.get('/', (req, res) => {
-    res.json({ status: 'ok', message: 'Service is running' });
+    const { callback } = req.query;
+    const response = { status: 'ok', message: 'Service is running' };
+    
+    if (callback) {
+        res.jsonp(response);
+    } else {
+        res.json(response);
+    }
 });
 
 app.get('/api/route', async (req, res) => {
     try {
-        const { origin, destination, mode } = req.query;
+        const { origin, destination, mode, callback } = req.query;
         const amapKey = process.env.AMAP_API_KEY;
 
         if (!origin || !destination || !mode) {
-            return res.json({
+            const error = {
                 status: "0",
                 info: "缺少必要参数",
                 type: mode || "unknown",
                 route_info: {}
-            });
+            };
+            return callback ? res.jsonp(error) : res.json(error);
         }
 
         let url;
@@ -59,24 +66,26 @@ app.get('/api/route', async (req, res) => {
                 url = `https://restapi.amap.com/v3/direction/riding?origin=${origin}&destination=${destination}&key=${amapKey}`;
                 break;
             default:
-                return res.json({
+                const error = {
                     status: "0",
                     info: "无效的出行方式",
                     type: mode,
                     route_info: {}
-                });
+                };
+                return callback ? res.jsonp(error) : res.json(error);
         }
 
         const response = await axios.get(url);
         const result = response.data;
 
         if (result.status !== '1') {
-            return res.json({
+            const error = {
                 status: "0",
                 info: result.info || "路线规划失败",
                 type: mode,
                 route_info: {}
-            });
+            };
+            return callback ? res.jsonp(error) : res.json(error);
         }
 
         // 处理不同出行方式的返回数据
@@ -168,21 +177,33 @@ app.get('/api/route', async (req, res) => {
                 break;
         }
 
-        res.json({
+        const responseData = {
             status: "1",
             info: "OK",
             type: mode,
             route_info: routeInfo
-        });
+        };
+
+        if (callback) {
+            res.jsonp(responseData);
+        } else {
+            res.json(responseData);
+        }
 
     } catch (error) {
         console.error('路线规划错误:', error);
-        res.json({
+        const errorResponse = {
             status: "0",
             info: error.message || "服务器错误",
             type: mode,
             route_info: {}
-        });
+        };
+
+        if (callback) {
+            res.jsonp(errorResponse);
+        } else {
+            res.json(errorResponse);
+        }
     }
 });
 
