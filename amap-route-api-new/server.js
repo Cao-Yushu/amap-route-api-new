@@ -50,6 +50,23 @@ const EBIKE_CONSTANTS = {
     CALORIE_PER_KM: 0      // 电动自行车不计算卡路里消耗
 };
 
+// 碳排放常量（g/km）
+const CARBON_CONSTANTS = {
+    DRIVING: 180,   // g/km
+    TAXI: 180,      // g/km
+    TRANSIT: 30,    // g/km
+    WALKING: 0,     // g/km
+    BICYCLING: 0,   // g/km
+    EBIKE: 0        // g/km
+};
+
+// 卡路里常量（kcal/km）
+const CALORIE_CONSTANTS = {
+    WALKING: 65,    // kcal/km
+    BICYCLING: 40,  // kcal/km
+    EBIKE: 0        // kcal/km
+};
+
 // 健康检查端点
 app.get('/', (req, res) => {
     const { callback } = req.query;
@@ -119,7 +136,7 @@ app.get('/api/route', async (req, res) => {
                 if (paths && paths.length > 0) {
                     const path = paths[0];
                     const distanceInKm = parseInt(path.distance) / 1000;
-                    
+
                     const originalDuration = parseInt(path.duration);
                     const duration = mode === 'ebike' 
                         ? Math.floor(originalDuration / EBIKE_CONSTANTS.SPEED_MULTIPLIER)
@@ -128,12 +145,16 @@ app.get('/api/route', async (req, res) => {
                     let costDetail;
                     let totalCost = 0;
                     let calories = 0;
+                    let carbon = 0;
 
                     if (mode === 'ebike') {
                         totalCost = parseFloat((distanceInKm * EBIKE_CONSTANTS.COST_PER_KM).toFixed(2));
+                        calories = 0;
+                        carbon = 0;
                         costDetail = `电费和损耗: ${totalCost}元`;
                     } else {
-                        calories = parseFloat((distanceInKm * 40).toFixed(2));
+                        calories = parseFloat((distanceInKm * CALORIE_CONSTANTS.BICYCLING).toFixed(2));
+                        carbon = 0;
                         costDetail = `消耗卡路里: ${calories}卡`;
                     }
 
@@ -148,6 +169,7 @@ app.get('/api/route', async (req, res) => {
                         },
                         cost: {
                             calorie: calories,
+                            carbon: carbon,
                             total: totalCost,
                             cost_detail: costDetail
                         }
@@ -160,6 +182,27 @@ app.get('/api/route', async (req, res) => {
                 const depreciationCost = distanceInKm * DRIVING_COST_CONSTANTS.DEPRECIATION_PER_KM;
                 const tollCost = path.tolls ? parseFloat(path.tolls) : 0;
                 const totalCost = fuelCost + depreciationCost + tollCost;
+
+                // 网约车价格
+                const taxiCost = response.data.route.taxi_cost ? parseFloat(response.data.route.taxi_cost) : null;
+
+                // TMC三种情景
+                const tmcRates = [1, 2, 3]; // 元/公里
+                const tmcResults = tmcRates.map(rate => {
+                    const tmcCost = distanceInKm * rate;
+                    return {
+                        tmc_rate: rate,
+                        driving_total: parseFloat((totalCost + tmcCost).toFixed(2)),
+                        taxi_total: taxiCost !== null ? parseFloat((taxiCost + tmcCost).toFixed(2)) : null,
+                        tmc_cost: parseFloat(tmcCost.toFixed(2))
+                    };
+                });
+
+                // 驾车/网约车卡路里和碳排放
+                const drivingCalorie = 0;
+                const drivingCarbon = parseFloat((distanceInKm * CARBON_CONSTANTS.DRIVING).toFixed(2));
+                const taxiCalorie = 0;
+                const taxiCarbon = parseFloat((distanceInKm * CARBON_CONSTANTS.TAXI).toFixed(2));
 
                 result.route_info = {
                     duration: {
@@ -175,12 +218,21 @@ app.get('/api/route', async (req, res) => {
                         depreciation: parseFloat(depreciationCost.toFixed(2)),
                         toll: tollCost,
                         total: parseFloat(totalCost.toFixed(2)),
-                        cost_detail: `油费: ${fuelCost.toFixed(2)}元, 折旧: ${depreciationCost.toFixed(2)}元${tollCost > 0 ? `, 过路费: ${tollCost}元` : ''}`
+                        taxi_cost: taxiCost,
+                        tmc_scenarios: tmcResults,
+                        calorie: drivingCalorie,
+                        carbon: drivingCarbon,
+                        taxi_calorie: taxiCalorie,
+                        taxi_carbon: taxiCarbon,
+                        cost_detail: `油费: ${fuelCost.toFixed(2)}元, 折旧: ${depreciationCost.toFixed(2)}元${tollCost > 0 ? `, 过路费: ${tollCost}元` : ''}${taxiCost !== null ? `, 网约车: ${taxiCost}元` : ''}`
                     }
                 };
             } else if (mode === 'transit') {
                 if (response.data.route && response.data.route.transits && response.data.route.transits.length > 0) {
                     const transit = response.data.route.transits[0];
+                    const distanceInKm = parseInt(transit.distance) / 1000;
+                    const calorie = 0;
+                    const carbon = parseFloat((distanceInKm * CARBON_CONSTANTS.TRANSIT).toFixed(2));
                     result.route_info = {
                         duration: {
                             value: parseInt(transit.duration),
@@ -188,11 +240,13 @@ app.get('/api/route', async (req, res) => {
                         },
                         distance: {
                             value: parseInt(transit.distance),
-                            text: `${(parseInt(transit.distance) / 1000).toFixed(2)}公里`
+                            text: `${distanceInKm.toFixed(2)}公里`
                         },
                         cost: {
                             total: parseFloat(transit.cost),
                             walking_distance: parseInt(transit.walking_distance),
+                            calorie: calorie,
+                            carbon: carbon,
                             cost_detail: `票价: ${transit.cost}元, 步行距离: ${(transit.walking_distance / 1000).toFixed(2)}公里`
                         }
                     };
@@ -200,7 +254,8 @@ app.get('/api/route', async (req, res) => {
             } else if (mode === 'walking') {
                 const path = response.data.route.paths[0];
                 const distanceInKm = parseInt(path.distance) / 1000;
-                
+                const calorie = parseFloat((distanceInKm * CALORIE_CONSTANTS.WALKING).toFixed(2));
+                const carbon = 0;
                 result.route_info = {
                     duration: {
                         value: parseInt(path.duration),
@@ -211,9 +266,10 @@ app.get('/api/route', async (req, res) => {
                         text: `${distanceInKm.toFixed(2)}公里`
                     },
                     cost: {
-                        calorie: parseFloat((distanceInKm * 65).toFixed(2)),
+                        calorie: calorie,
+                        carbon: carbon,
                         total: 0,
-                        cost_detail: `消耗卡路里: ${(distanceInKm * 65).toFixed(2)}卡`
+                        cost_detail: `消耗卡路里: ${calorie}卡`
                     }
                 };
             }
