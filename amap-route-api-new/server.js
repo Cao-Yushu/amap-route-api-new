@@ -4,9 +4,9 @@ const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// 更新CORS配置
+// CORS配置
 const corsOptions = {
-    origin: '*', // 允许所有域名访问
+    origin: '*',
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Accept', 'Origin', 'X-Requested-With'],
     credentials: true,
@@ -20,10 +20,11 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Content-Type', 'application/json; charset=utf-8');
     next();
 });
 
-// 路由处理
+// 健康检查端点
 app.get('/', (req, res) => {
     const { callback } = req.query;
     const response = { status: 'ok', message: 'Service is running' };
@@ -35,6 +36,7 @@ app.get('/', (req, res) => {
     }
 });
 
+// 主路由处理
 app.get('/api/route', async (req, res) => {
     try {
         const { origin, destination, mode, callback } = req.query;
@@ -50,8 +52,11 @@ app.get('/api/route', async (req, res) => {
             return callback ? res.jsonp(error) : res.json(error);
         }
 
+        // 如果是网约车模式，使用驾车路线的数据
+        const actualMode = mode === 'taxi' ? 'driving' : mode;
+
         let url;
-        switch (mode) {
+        switch (actualMode) {
             case 'driving':
                 url = `https://restapi.amap.com/v3/direction/driving?origin=${origin}&destination=${destination}&extensions=all&key=${amapKey}`;
                 break;
@@ -92,6 +97,7 @@ app.get('/api/route', async (req, res) => {
         let routeInfo = {};
         switch (mode) {
             case 'driving':
+            case 'taxi':
                 const path = result.route.paths[0];
                 const distance = parseFloat(path.distance) / 1000; // 转换为公里
                 const duration = Math.ceil(path.duration / 60); // 转换为分钟
@@ -100,9 +106,15 @@ app.get('/api/route', async (req, res) => {
                 const taxiCost = parseFloat(result.route.taxi_cost || "0");
                 
                 // 计算不同TMC情况下的成本
-                const tmcCost1 = distance * 1 + fuelCost + depreciationCost;
-                const tmcCost2 = distance * 2 + fuelCost + depreciationCost;
-                const tmcCost3 = distance * 3 + fuelCost + depreciationCost;
+                const tmcCost1 = mode === 'taxi' ? 
+                    (taxiCost + distance) : 
+                    (distance + fuelCost + depreciationCost);
+                const tmcCost2 = mode === 'taxi' ? 
+                    (taxiCost + distance * 2) : 
+                    (distance * 2 + fuelCost + depreciationCost);
+                const tmcCost3 = mode === 'taxi' ? 
+                    (taxiCost + distance * 3) : 
+                    (distance * 3 + fuelCost + depreciationCost);
 
                 routeInfo = {
                     distance: distance.toFixed(2),
@@ -112,9 +124,9 @@ app.get('/api/route', async (req, res) => {
                     cost_tmc3: tmcCost3.toFixed(2),
                     carbon: Math.round(distance * 171), // 碳排放：171g/km
                     calories: 0,
-                    fuel_cost: fuelCost.toFixed(2),
-                    depreciation_cost: depreciationCost.toFixed(2),
-                    taxi_cost: taxiCost.toFixed(2)
+                    fuel_cost: mode === 'taxi' ? "0.00" : fuelCost.toFixed(2),
+                    depreciation_cost: mode === 'taxi' ? "0.00" : depreciationCost.toFixed(2),
+                    taxi_cost: mode === 'taxi' ? taxiCost.toFixed(2) : "0.00"
                 };
                 break;
 
