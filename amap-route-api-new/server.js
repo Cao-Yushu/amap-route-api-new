@@ -99,11 +99,15 @@ app.get('/api/route', async (req, res) => {
             case 'driving':
             case 'taxi':
                 const path = result.route.paths[0];
-                const duration = Math.ceil(parseInt(path.duration) / 60); // 直接使用API返回的时间（转换为分钟）
-                const distance = parseFloat(path.distance) / 1000; // 转换为公里
+                // API返回的距离是米，转换为公里
+                const distance = parseFloat(path.distance) / 1000;
+                // API返回的时间是秒，转换为分钟
+                const duration = Math.ceil(parseInt(path.duration) / 60);
                 const fuelCost = (distance * 7.79 * 8.0) / 100; // 油费计算
                 const depreciationCost = distance * 0.5; // 折旧成本
-                const taxiCost = parseFloat(result.route.taxi_cost || "0");
+                // 获取出租车费用
+                const taxiCost = mode === 'taxi' ? 
+                    (result.route.taxi_cost ? parseFloat(result.route.taxi_cost) : 0) : 0;
                 
                 routeInfo = {
                     distance: distance.toFixed(2),
@@ -121,7 +125,7 @@ app.get('/api/route', async (req, res) => {
 
             case 'transit':
                 const transitPath = result.route.transits[0];
-                const transitDuration = Math.ceil(parseInt(transitPath.duration) / 60); // 直接使用API返回的时间
+                const transitDuration = Math.ceil(parseInt(transitPath.duration) / 60);
                 const transitDistance = parseFloat(transitPath.distance) / 1000;
                 const walkingDistance = (transitPath.walking_distance || 0) / 1000;
                 
@@ -137,7 +141,7 @@ app.get('/api/route', async (req, res) => {
 
             case 'walking':
                 const walkPath = result.route.paths[0];
-                const walkDuration = Math.ceil(parseInt(walkPath.duration) / 60); // 直接使用API返回的时间
+                const walkDuration = Math.ceil(parseInt(walkPath.duration) / 60);
                 const walkDistance = parseFloat(walkPath.distance) / 1000;
                 
                 routeInfo = {
@@ -151,7 +155,7 @@ app.get('/api/route', async (req, res) => {
 
             case 'bicycling':
                 const bikePath = result.route.paths[0];
-                const bikeDuration = Math.ceil(parseInt(bikePath.duration) / 60); // 直接使用API返回的时间
+                const bikeDuration = Math.ceil(parseInt(bikePath.duration) / 60);
                 const bikeDistance = parseFloat(bikePath.distance) / 1000;
                 
                 routeInfo = {
@@ -165,7 +169,7 @@ app.get('/api/route', async (req, res) => {
 
             case 'ebike':
                 const ebikePath = result.route.paths[0];
-                const ebikeDuration = Math.ceil(parseInt(ebikePath.duration) / 60); // 直接使用API返回的时间
+                const ebikeDuration = Math.ceil(parseInt(ebikePath.duration) / 60);
                 const ebikeDistance = parseFloat(ebikePath.distance) / 1000;
                 
                 routeInfo = {
