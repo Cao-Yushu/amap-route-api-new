@@ -99,29 +99,18 @@ app.get('/api/route', async (req, res) => {
             case 'driving':
             case 'taxi':
                 const path = result.route.paths[0];
+                const duration = Math.ceil(parseInt(path.duration) / 60); // 直接使用API返回的时间（转换为分钟）
                 const distance = parseFloat(path.distance) / 1000; // 转换为公里
-                const duration = Math.ceil(path.duration / 60); // 转换为分钟
                 const fuelCost = (distance * 7.79 * 8.0) / 100; // 油费计算
                 const depreciationCost = distance * 0.5; // 折旧成本
                 const taxiCost = parseFloat(result.route.taxi_cost || "0");
                 
-                // 计算不同TMC情况下的成本
-                const tmcCost1 = mode === 'taxi' ? 
-                    (taxiCost + distance) : 
-                    (distance + fuelCost + depreciationCost);
-                const tmcCost2 = mode === 'taxi' ? 
-                    (taxiCost + distance * 2) : 
-                    (distance * 2 + fuelCost + depreciationCost);
-                const tmcCost3 = mode === 'taxi' ? 
-                    (taxiCost + distance * 3) : 
-                    (distance * 3 + fuelCost + depreciationCost);
-
                 routeInfo = {
                     distance: distance.toFixed(2),
                     duration,
-                    cost_tmc1: tmcCost1.toFixed(2),
-                    cost_tmc2: tmcCost2.toFixed(2),
-                    cost_tmc3: tmcCost3.toFixed(2),
+                    cost_tmc1: mode === 'taxi' ? taxiCost.toFixed(2) : (distance + fuelCost + depreciationCost).toFixed(2),
+                    cost_tmc2: mode === 'taxi' ? (taxiCost + distance).toFixed(2) : ((distance * 2) + fuelCost + depreciationCost).toFixed(2),
+                    cost_tmc3: mode === 'taxi' ? (taxiCost + distance * 2).toFixed(2) : ((distance * 3) + fuelCost + depreciationCost).toFixed(2),
                     carbon: Math.round(distance * 171), // 碳排放：171g/km
                     calories: 0,
                     fuel_cost: mode === 'taxi' ? "0.00" : fuelCost.toFixed(2),
@@ -132,8 +121,8 @@ app.get('/api/route', async (req, res) => {
 
             case 'transit':
                 const transitPath = result.route.transits[0];
+                const transitDuration = Math.ceil(parseInt(transitPath.duration) / 60); // 直接使用API返回的时间
                 const transitDistance = parseFloat(transitPath.distance) / 1000;
-                const transitDuration = Math.ceil(transitPath.duration / 60);
                 const walkingDistance = (transitPath.walking_distance || 0) / 1000;
                 
                 routeInfo = {
@@ -148,8 +137,8 @@ app.get('/api/route', async (req, res) => {
 
             case 'walking':
                 const walkPath = result.route.paths[0];
+                const walkDuration = Math.ceil(parseInt(walkPath.duration) / 60); // 直接使用API返回的时间
                 const walkDistance = parseFloat(walkPath.distance) / 1000;
-                const walkDuration = Math.ceil(walkPath.duration / 60);
                 
                 routeInfo = {
                     distance: walkDistance.toFixed(2),
@@ -162,8 +151,8 @@ app.get('/api/route', async (req, res) => {
 
             case 'bicycling':
                 const bikePath = result.route.paths[0];
+                const bikeDuration = Math.ceil(parseInt(bikePath.duration) / 60); // 直接使用API返回的时间
                 const bikeDistance = parseFloat(bikePath.distance) / 1000;
-                const bikeDuration = Math.ceil(bikePath.duration / 60);
                 
                 routeInfo = {
                     distance: bikeDistance.toFixed(2),
@@ -176,8 +165,8 @@ app.get('/api/route', async (req, res) => {
 
             case 'ebike':
                 const ebikePath = result.route.paths[0];
+                const ebikeDuration = Math.ceil(parseInt(ebikePath.duration) / 60); // 直接使用API返回的时间
                 const ebikeDistance = parseFloat(ebikePath.distance) / 1000;
-                const ebikeDuration = Math.ceil(ebikePath.duration / 60 / 1.5); // 电动自行车速度是普通自行车的1.5倍
                 
                 routeInfo = {
                     distance: ebikeDistance.toFixed(2),
@@ -216,6 +205,59 @@ app.get('/api/route', async (req, res) => {
         } else {
             res.json(errorResponse);
         }
+    }
+});
+
+// 添加调试端点
+app.get('/debug/route', async (req, res) => {
+    try {
+        const { origin, destination, mode } = req.query;
+        const amapKey = process.env.AMAP_API_KEY;
+
+        if (!origin || !destination || !mode) {
+            return res.json({
+                error: "Missing required parameters",
+                params: { origin, destination, mode }
+            });
+        }
+
+        const actualMode = mode === 'taxi' ? 'driving' : mode;
+        
+        let url;
+        switch (actualMode) {
+            case 'driving':
+                url = `https://restapi.amap.com/v3/direction/driving?origin=${origin}&destination=${destination}&extensions=all&key=${amapKey}`;
+                break;
+            case 'transit':
+                url = `https://restapi.amap.com/v3/direction/transit/integrated?origin=${origin}&destination=${destination}&city=0755&extensions=all&key=${amapKey}`;
+                break;
+            case 'walking':
+                url = `https://restapi.amap.com/v3/direction/walking?origin=${origin}&destination=${destination}&key=${amapKey}`;
+                break;
+            case 'bicycling':
+            case 'ebike':
+                url = `https://restapi.amap.com/v3/direction/riding?origin=${origin}&destination=${destination}&key=${amapKey}`;
+                break;
+            default:
+                return res.json({
+                    error: "Invalid mode",
+                    mode: mode
+                });
+        }
+
+        const response = await axios.get(url);
+        
+        // 返回原始API响应和处理后的数据
+        res.json({
+            raw_amap_response: response.data,
+            url_called: url
+        });
+
+    } catch (error) {
+        res.json({
+            error: error.message,
+            stack: error.stack
+        });
     }
 });
 
