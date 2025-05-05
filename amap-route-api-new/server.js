@@ -115,8 +115,6 @@ app.get('/api/route', async (req, res) => {
                     cost_tmc1: mode === 'taxi' ? taxiCost.toFixed(2) : (distance + fuelCost + depreciationCost).toFixed(2),
                     cost_tmc2: mode === 'taxi' ? (taxiCost + distance).toFixed(2) : ((distance * 2) + fuelCost + depreciationCost).toFixed(2),
                     cost_tmc3: mode === 'taxi' ? (taxiCost + distance * 2).toFixed(2) : ((distance * 3) + fuelCost + depreciationCost).toFixed(2),
-                    carbon: Math.round(distance * 171), // 碳排放：171g/km
-                    calories: 0,
                     fuel_cost: mode === 'taxi' ? "0.00" : fuelCost.toFixed(2),
                     depreciation_cost: mode === 'taxi' ? "0.00" : depreciationCost.toFixed(2),
                     taxi_cost: mode === 'taxi' ? taxiCost.toFixed(2) : "0.00"
@@ -133,9 +131,7 @@ app.get('/api/route', async (req, res) => {
                     distance: transitDistance.toFixed(2),
                     duration: transitDuration,
                     cost: transitPath.cost || "2.00",
-                    walking_distance: walkingDistance.toFixed(2),
-                    carbon: Math.round(transitDistance * 30), // 碳排放：30g/km
-                    calories: Math.round(walkingDistance * 65) // 步行消耗：65kcal/km
+                    walking_distance: walkingDistance.toFixed(2)
                 };
                 break;
 
@@ -147,9 +143,7 @@ app.get('/api/route', async (req, res) => {
                 routeInfo = {
                     distance: walkDistance.toFixed(2),
                     duration: walkDuration,
-                    cost: "0.00",
-                    carbon: 0,
-                    calories: Math.round(walkDistance * 65) // 步行消耗：65kcal/km
+                    cost: "0.00"
                 };
                 break;
 
@@ -161,9 +155,7 @@ app.get('/api/route', async (req, res) => {
                 routeInfo = {
                     distance: bikeDistance.toFixed(2),
                     duration: bikeDuration,
-                    cost: "0.00",
-                    carbon: 0,
-                    calories: Math.round(bikeDistance * 40) // 自行车消耗：40kcal/km
+                    cost: "0.00"
                 };
                 break;
 
@@ -175,9 +167,7 @@ app.get('/api/route', async (req, res) => {
                 routeInfo = {
                     distance: ebikeDistance.toFixed(2),
                     duration: ebikeDuration,
-                    cost: (ebikeDistance * 0.1).toFixed(2), // 电动自行车成本：0.1元/km
-                    carbon: Math.round(ebikeDistance * 12), // 碳排放：12g/km
-                    calories: 0
+                    cost: (ebikeDistance * 0.1).toFixed(2) // 电动自行车成本：0.1元/km
                 };
                 break;
         }
