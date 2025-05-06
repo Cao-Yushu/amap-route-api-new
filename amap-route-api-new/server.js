@@ -102,32 +102,49 @@ app.get('/api/route', async (req, res) => {
                 const duration = Math.ceil(parseInt(path.duration) / 60);
                 const fuelCost = (distance * 7.79 * 8.0) / 100; // 油费计算
 
-                // 根据动力类型计算 TMC 单价
-                let tmcUnitPrice = 0.5; // 默认燃油车
+                // 根据动力类型计算基础 TMC 单价
+                let baseTmcPrice = 0.5; // 默认燃油车
                 if (powerType) {
                     switch(powerType) {
                         case '混动（燃油+电动）':
-                            tmcUnitPrice = 0.35;
+                            baseTmcPrice = 0.35;
                             break;
                         case '纯电动':
-                            tmcUnitPrice = 0.25;
+                            baseTmcPrice = 0.25;
                             break;
                         default: // 燃油
-                            tmcUnitPrice = 0.5;
+                            baseTmcPrice = 0.5;
                     }
                 }
 
-                const depreciationCost = distance * tmcUnitPrice;
+                // 计算不同价格水平下的折旧成本和总成本
+                const depreciationCost = {
+                    base: distance * baseTmcPrice,
+                    double: distance * (baseTmcPrice * 2),
+                    quadruple: distance * (baseTmcPrice * 4)
+                };
 
                 routeInfo = {
                     distance: distance.toFixed(2),
                     duration,
-                    cost_tmc1: (distance + fuelCost + depreciationCost).toFixed(2),
-                    cost_tmc2: ((distance * 2) + fuelCost + depreciationCost).toFixed(2),
-                    cost_tmc3: ((distance * 3) + fuelCost + depreciationCost).toFixed(2),
+                    // 基础价格水平
+                    base_cost: (distance + fuelCost + depreciationCost.base).toFixed(2),
+                    // 翻倍价格水平
+                    double_cost: (distance + fuelCost + depreciationCost.double).toFixed(2),
+                    // 四倍价格水平
+                    quadruple_cost: (distance + fuelCost + depreciationCost.quadruple).toFixed(2),
+                    // 成本明细
                     fuel_cost: fuelCost.toFixed(2),
-                    depreciation_cost: depreciationCost.toFixed(2),
-                    tmc_unit_price: tmcUnitPrice
+                    depreciation_costs: {
+                        base: depreciationCost.base.toFixed(2),
+                        double: depreciationCost.double.toFixed(2),
+                        quadruple: depreciationCost.quadruple.toFixed(2)
+                    },
+                    tmc_unit_prices: {
+                        base: baseTmcPrice,
+                        double: (baseTmcPrice * 2),
+                        quadruple: (baseTmcPrice * 4)
+                    }
                 };
                 break;
 
@@ -135,15 +152,19 @@ app.get('/api/route', async (req, res) => {
                 const taxiPath = result.route.paths[0];
                 const taxiDistance = parseFloat(taxiPath.distance) / 1000;
                 const taxiDuration = Math.ceil(parseInt(taxiPath.duration) / 60);
-                const taxiCost = result.route.taxi_cost ? parseFloat(result.route.taxi_cost) : 0;
+                const baseTaxiCost = result.route.taxi_cost ? parseFloat(result.route.taxi_cost) : 0;
 
                 routeInfo = {
                     distance: taxiDistance.toFixed(2),
                     duration: taxiDuration,
-                    cost_tmc1: taxiCost.toFixed(2),
-                    cost_tmc2: (taxiCost + taxiDistance).toFixed(2),
-                    cost_tmc3: (taxiCost + taxiDistance * 2).toFixed(2),
-                    taxi_cost: taxiCost.toFixed(2)
+                    // 基础价格水平
+                    base_cost: baseTaxiCost.toFixed(2),
+                    // 翻倍价格水平
+                    double_cost: (baseTaxiCost + taxiDistance).toFixed(2),
+                    // 四倍价格水平
+                    quadruple_cost: (baseTaxiCost + taxiDistance * 3).toFixed(2),
+                    // 基础打车费用
+                    taxi_cost: baseTaxiCost.toFixed(2)
                 };
                 break;
 
