@@ -39,7 +39,7 @@ app.get('/', (req, res) => {
 // 主路由处理
 app.get('/api/route', async (req, res) => {
     try {
-        const { origin, destination, mode, callback } = req.query;
+        const { origin, destination, mode, callback, powerType } = req.query;
         const amapKey = process.env.AMAP_API_KEY;
 
         if (!origin || !destination || !mode) {
@@ -97,27 +97,53 @@ app.get('/api/route', async (req, res) => {
         let routeInfo = {};
         switch (mode) {
             case 'driving':
-            case 'taxi':
                 const path = result.route.paths[0];
-                // API返回的距离是米，转换为公里
                 const distance = parseFloat(path.distance) / 1000;
-                // API返回的时间是秒，转换为分钟
                 const duration = Math.ceil(parseInt(path.duration) / 60);
                 const fuelCost = (distance * 7.79 * 8.0) / 100; // 油费计算
-                const depreciationCost = distance * 0.5; // 折旧成本
-                // 获取出租车费用
-                const taxiCost = mode === 'taxi' ? 
-                    (result.route.taxi_cost ? parseFloat(result.route.taxi_cost) : 0) : 0;
-                
+
+                // 根据动力类型计算 TMC 单价
+                let tmcUnitPrice = 0.5; // 默认燃油车
+                if (powerType) {
+                    switch(powerType) {
+                        case '混动（燃油+电动）':
+                            tmcUnitPrice = 0.35;
+                            break;
+                        case '纯电动':
+                            tmcUnitPrice = 0.25;
+                            break;
+                        default: // 燃油
+                            tmcUnitPrice = 0.5;
+                    }
+                }
+
+                const depreciationCost = distance * tmcUnitPrice;
+
                 routeInfo = {
                     distance: distance.toFixed(2),
                     duration,
-                    cost_tmc1: mode === 'taxi' ? taxiCost.toFixed(2) : (distance + fuelCost + depreciationCost).toFixed(2),
-                    cost_tmc2: mode === 'taxi' ? (taxiCost + distance).toFixed(2) : ((distance * 2) + fuelCost + depreciationCost).toFixed(2),
-                    cost_tmc3: mode === 'taxi' ? (taxiCost + distance * 2).toFixed(2) : ((distance * 3) + fuelCost + depreciationCost).toFixed(2),
-                    fuel_cost: mode === 'taxi' ? "0.00" : fuelCost.toFixed(2),
-                    depreciation_cost: mode === 'taxi' ? "0.00" : depreciationCost.toFixed(2),
-                    taxi_cost: mode === 'taxi' ? taxiCost.toFixed(2) : "0.00"
+                    cost_tmc1: (distance + fuelCost + depreciationCost).toFixed(2),
+                    cost_tmc2: ((distance * 2) + fuelCost + depreciationCost).toFixed(2),
+                    cost_tmc3: ((distance * 3) + fuelCost + depreciationCost).toFixed(2),
+                    fuel_cost: fuelCost.toFixed(2),
+                    depreciation_cost: depreciationCost.toFixed(2),
+                    tmc_unit_price: tmcUnitPrice
+                };
+                break;
+
+            case 'taxi':
+                const taxiPath = result.route.paths[0];
+                const taxiDistance = parseFloat(taxiPath.distance) / 1000;
+                const taxiDuration = Math.ceil(parseInt(taxiPath.duration) / 60);
+                const taxiCost = result.route.taxi_cost ? parseFloat(result.route.taxi_cost) : 0;
+
+                routeInfo = {
+                    distance: taxiDistance.toFixed(2),
+                    duration: taxiDuration,
+                    cost_tmc1: taxiCost.toFixed(2),
+                    cost_tmc2: (taxiCost + taxiDistance).toFixed(2),
+                    cost_tmc3: (taxiCost + taxiDistance * 2).toFixed(2),
+                    taxi_cost: taxiCost.toFixed(2)
                 };
                 break;
 
@@ -190,7 +216,7 @@ app.get('/api/route', async (req, res) => {
         const errorResponse = {
             status: "0",
             info: error.message || "服务器错误",
-            type: mode,
+            type: mode || "unknown",
             route_info: {}
         };
 
@@ -205,13 +231,13 @@ app.get('/api/route', async (req, res) => {
 // 添加调试端点
 app.get('/debug/route', async (req, res) => {
     try {
-        const { origin, destination, mode } = req.query;
+        const { origin, destination, mode, powerType } = req.query;
         const amapKey = process.env.AMAP_API_KEY;
 
         if (!origin || !destination || !mode) {
             return res.json({
                 error: "Missing required parameters",
-                params: { origin, destination, mode }
+                params: { origin, destination, mode, powerType }
             });
         }
 
@@ -244,7 +270,8 @@ app.get('/debug/route', async (req, res) => {
         // 返回原始API响应和处理后的数据
         res.json({
             raw_amap_response: response.data,
-            url_called: url
+            url_called: url,
+            power_type: powerType
         });
 
     } catch (error) {
