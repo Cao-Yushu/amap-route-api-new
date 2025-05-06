@@ -126,27 +126,58 @@ app.get('/api/route', async (req, res) => {
                     duration = Math.ceil(parseFloat(result.route.paths[0].duration) / 60);
 
                     if (mode === 'taxi') {
-                        // 使用高德API返回的实际打车费用
-                        cost = result.route.taxi_cost ? parseFloat(result.route.taxi_cost) : (10 + 2.5 * distance);
+                        // 记录原始API返回的打车费用
+                        const taxiCost = result.route.taxi_cost ? parseFloat(result.route.taxi_cost) : 0;
+                        console.log('API返回的打车费用:', taxiCost);
+
+                        if (taxiCost > 0) {
+                            // 计算混动车TMC成本
+                            const baseTmcPrice = 0.35; // 混动车基准TMC价格
+                            let tmcMultiplier;
+                            switch (tmcLevel) {
+                                case '2':
+                                    tmcMultiplier = 2;
+                                    break;
+                                case '4':
+                                    tmcMultiplier = 4;
+                                    break;
+                                default:
+                                    tmcMultiplier = 1;
+                            }
+                            const tmcCost = baseTmcPrice * distance * tmcMultiplier;
+                            
+                            // 总成本 = 打车费用 + TMC成本
+                            cost = taxiCost + tmcCost;
+
+                            console.log('网约车成本计算:', {
+                                taxiCost,
+                                tmcCost,
+                                totalCost: cost,
+                                distance,
+                                tmcMultiplier
+                            });
+                        } else {
+                            console.log('警告: API未返回打车费用');
+                            cost = 0;
+                        }
                     } else {
-                        // 根据动力类型设置基准TMC价格和基础运营成本
+                        // 普通驾车成本计算
                         let baseTmcPrice;
                         let baseOperationCost;
                         if (powerType === '燃油') {
                             baseTmcPrice = 0.5;
-                            baseOperationCost = 0.7; // 燃油车每公里0.7元
+                            baseOperationCost = 0.7;
                         } else if (powerType === '混动（燃油+电动）') {
                             baseTmcPrice = 0.35;
-                            baseOperationCost = 0.45; // 混动车每公里0.45元
+                            baseOperationCost = 0.45;
                         } else if (powerType === '纯电动') {
                             baseTmcPrice = 0.25;
-                            baseOperationCost = 0.25; // 电动车每公里0.25元
+                            baseOperationCost = 0.25;
                         } else {
                             baseTmcPrice = 0.5;
-                            baseOperationCost = 0.7; // 默认使用燃油车价格
+                            baseOperationCost = 0.7;
                         }
 
-                        // 根据TMC等级调整价格倍数（1x, 2x, 4x）
                         let tmcMultiplier;
                         switch (tmcLevel) {
                             case '2':
@@ -194,7 +225,7 @@ app.get('/api/route', async (req, res) => {
                     if (mode === 'ebike') {
                         // 电动自行车速度是普通自行车的1.67倍（时间为0.6倍）
                         duration = Math.ceil(duration * 0.6);
-                        cost = 0.08 * distance; // 电动自行车每公里0.08元电费
+                        cost = 0.08 * distance; // 电动自行车每公里0.08元成本
                     } else {
                         cost = 0;
                     }
