@@ -129,16 +129,21 @@ app.get('/api/route', async (req, res) => {
                         // 使用高德API返回的实际打车费用
                         cost = result.route.taxi_cost ? parseFloat(result.route.taxi_cost) : (10 + 2.5 * distance);
                     } else {
-                        // 根据动力类型设置基准TMC价格
+                        // 根据动力类型设置基准TMC价格和基础运营成本
                         let baseTmcPrice;
+                        let baseOperationCost;
                         if (powerType === '燃油') {
                             baseTmcPrice = 0.5;
+                            baseOperationCost = 0.7; // 燃油车每公里0.7元
                         } else if (powerType === '混动（燃油+电动）') {
                             baseTmcPrice = 0.35;
+                            baseOperationCost = 0.45; // 混动车每公里0.45元
                         } else if (powerType === '纯电动') {
                             baseTmcPrice = 0.25;
+                            baseOperationCost = 0.25; // 电动车每公里0.25元
                         } else {
-                            baseTmcPrice = 0.5; // 默认使用燃油车价格
+                            baseTmcPrice = 0.5;
+                            baseOperationCost = 0.7; // 默认使用燃油车价格
                         }
 
                         // 根据TMC等级调整价格倍数（1x, 2x, 4x）
@@ -155,9 +160,8 @@ app.get('/api/route', async (req, res) => {
                         }
 
                         const tmcCost = baseTmcPrice * distance * tmcMultiplier;
-                        const fuelCost = 1.5 * distance;
-                        const depreciationCost = 2 * distance;
-                        cost = tmcCost + fuelCost + depreciationCost;
+                        const operationCost = baseOperationCost * distance;
+                        cost = tmcCost + operationCost;
                     }
                 }
                 break;
@@ -167,6 +171,11 @@ app.get('/api/route', async (req, res) => {
                     duration = Math.ceil(parseFloat(result.route.transits[0].duration) / 60);
                     // 使用API返回的实际公交费用
                     cost = result.route.transits[0].cost ? parseFloat(result.route.transits[0].cost) : 3;
+                    console.log('公交路线信息:', {
+                        rawCost: result.route.transits[0].cost,
+                        parsedCost: cost,
+                        transitInfo: result.route.transits[0]
+                    });
                 }
                 break;
             case 'walking':
@@ -183,8 +192,8 @@ app.get('/api/route', async (req, res) => {
                     duration = Math.ceil(parseFloat(result.route.paths[0].duration) / 60);
                     
                     if (mode === 'ebike') {
-                        // 电动自行车速度是普通自行车的2倍，因此时间减半
-                        duration = Math.ceil(duration / 2);
+                        // 电动自行车速度是普通自行车的1.67倍（时间为0.6倍）
+                        duration = Math.ceil(duration * 0.6);
                         cost = 0.5 * distance; // 电动自行车每公里0.5元电费
                     } else {
                         cost = 0;
@@ -229,59 +238,6 @@ app.get('/api/route', async (req, res) => {
         } else {
             res.json(errorResponse);
         }
-    }
-});
-
-// 添加调试端点
-app.get('/debug/route', async (req, res) => {
-    try {
-        const { origin, destination, mode } = req.query;
-        const amapKey = process.env.AMAP_API_KEY;
-
-        if (!origin || !destination || !mode) {
-            return res.json({
-                error: "Missing required parameters",
-                params: { origin, destination, mode }
-            });
-        }
-
-        const actualMode = mode === 'taxi' ? 'driving' : mode;
-        
-        let url;
-        switch (actualMode) {
-            case 'driving':
-                url = `https://restapi.amap.com/v3/direction/driving?origin=${origin}&destination=${destination}&extensions=all&key=${amapKey}`;
-                break;
-            case 'transit':
-                url = `https://restapi.amap.com/v3/direction/transit/integrated?origin=${origin}&destination=${destination}&city=0755&extensions=all&key=${amapKey}`;
-                break;
-            case 'walking':
-                url = `https://restapi.amap.com/v3/direction/walking?origin=${origin}&destination=${destination}&key=${amapKey}`;
-                break;
-            case 'bicycling':
-            case 'ebike':
-                url = `https://restapi.amap.com/v3/direction/riding?origin=${origin}&destination=${destination}&key=${amapKey}`;
-                break;
-            default:
-                return res.json({
-                    error: "Invalid mode",
-                    mode: mode
-                });
-        }
-
-        const response = await axios.get(url);
-        
-        // 返回原始API响应和处理后的数据
-        res.json({
-            raw_amap_response: response.data,
-            url_called: url
-        });
-
-    } catch (error) {
-        res.json({
-            error: error.message,
-            stack: error.stack
-        });
     }
 });
 
