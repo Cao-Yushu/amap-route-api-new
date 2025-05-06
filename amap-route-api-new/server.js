@@ -118,6 +118,7 @@ app.get('/api/route', async (req, res) => {
         let distance = 0;
         let duration = 0;
         let cost = 0;
+        let isAvailable = true; // 添加可用性标志
 
         switch (actualMode) {
             case 'driving':
@@ -159,6 +160,7 @@ app.get('/api/route', async (req, res) => {
                         } else {
                             console.log('警告: API未返回打车费用');
                             cost = 0;
+                            isAvailable = false;
                         }
                     } else {
                         // 普通驾车成本计算
@@ -202,11 +204,22 @@ app.get('/api/route', async (req, res) => {
                     duration = Math.ceil(parseFloat(result.route.transits[0].duration) / 60);
                     // 使用API返回的实际公交费用
                     cost = result.route.transits[0].cost ? parseFloat(result.route.transits[0].cost) : 3;
+                    
+                    // 检查公交路线是否可用
+                    if (duration === 0 || cost === 0) {
+                        console.log('警告: 公交路线不可用 - 时间或费用为0');
+                        isAvailable = false;
+                    }
+
                     console.log('公交路线信息:', {
                         rawCost: result.route.transits[0].cost,
                         parsedCost: cost,
+                        duration: duration,
+                        isAvailable: isAvailable,
                         transitInfo: result.route.transits[0]
                     });
+                } else {
+                    isAvailable = false;
                 }
                 break;
             case 'walking':
@@ -225,7 +238,7 @@ app.get('/api/route', async (req, res) => {
                     if (mode === 'ebike') {
                         // 电动自行车速度是普通自行车的1.67倍（时间为0.6倍）
                         duration = Math.ceil(duration * 0.6);
-                        cost = 0.08 * distance; // 电动自行车每公里0.08元成本
+                        cost = 0.08 * distance; // 电动自行车每公里0.08元电费
                     } else {
                         cost = 0;
                     }
@@ -235,12 +248,13 @@ app.get('/api/route', async (req, res) => {
 
         const routeInfo = {
             status: "1",
-            info: "OK",
+            info: isAvailable ? "OK" : "路线不可用",
             type: mode,
             route_info: {
                 distance: parseFloat(distance.toFixed(1)),
-                duration: duration,
-                cost: parseFloat(cost.toFixed(1))
+                duration: isAvailable ? duration : 0,
+                cost: isAvailable ? parseFloat(cost.toFixed(1)) : 0,
+                available: isAvailable
             }
         };
 
@@ -261,7 +275,8 @@ app.get('/api/route', async (req, res) => {
             route_info: {
                 distance: 0,
                 duration: 0,
-                cost: 0
+                cost: 0,
+                available: false
             }
         };
         if (req.query.callback) {
