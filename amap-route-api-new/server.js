@@ -194,7 +194,7 @@ app.get('/api/route', async (req, res) => {
                     if (mode === 'ebike') {
                         // 电动自行车速度是普通自行车的1.67倍（时间为0.6倍）
                         duration = Math.ceil(duration * 0.6);
-                        cost = 0.5 * distance; // 电动自行车每公里0.5元电费
+                        cost = 0.08 * distance; // 电动自行车每公里0.08元电费
                     } else {
                         cost = 0;
                     }
