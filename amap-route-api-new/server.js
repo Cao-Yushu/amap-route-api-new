@@ -42,6 +42,15 @@ app.get('/api/route', async (req, res) => {
         const { origin, destination, mode, powerType, callback } = req.query;
         const amapKey = process.env.AMAP_API_KEY;
 
+        // 记录接收到的参数
+        console.log('收到请求参数:', {
+            origin,
+            destination,
+            mode,
+            powerType,
+            hasCallback: !!callback
+        });
+
         if (!origin || !destination || !mode) {
             const error = {
                 status: "0",
@@ -112,26 +121,39 @@ app.get('/api/route', async (req, res) => {
         switch (actualMode) {
             case 'driving':
                 if (result.route && result.route.paths && result.route.paths[0]) {
-                    distance = parseFloat(result.route.paths[0].distance) / 1000; // 转换为公里
-                    duration = Math.ceil(parseFloat(result.route.paths[0].duration) / 60); // 转换为分钟
+                    distance = parseFloat(result.route.paths[0].distance) / 1000;
+                    duration = Math.ceil(parseFloat(result.route.paths[0].duration) / 60);
 
                     // 基础TMC价格
-                    const baseTmcPrice = 2.0; // 基础TMC价格，每公里2元
+                    const baseTmcPrice = 2.0;
                     let tmcMultiplier = 1;
 
                     // 根据动力类型设置价格倍数
+                    console.log('动力类型:', powerType);
                     if (powerType === '燃油') {
-                        tmcMultiplier = 2; // 燃油车2倍
+                        tmcMultiplier = 2;
                     } else if (powerType === '混动（燃油+电动）') {
-                        tmcMultiplier = 1.5; // 混动车1.5倍
+                        tmcMultiplier = 1.5;
                     } else if (powerType === '纯电动') {
-                        tmcMultiplier = 1; // 电动车基础价格
+                        tmcMultiplier = 1;
+                    } else {
+                        // 如果没有指定动力类型，使用默认值
+                        tmcMultiplier = 1;
                     }
 
                     const tmcCost = baseTmcPrice * distance * tmcMultiplier;
-                    const fuelCost = 1.5 * distance; // 假设每公里1.5元燃油成本
-                    const depreciationCost = 2 * distance; // 假设每公里2元折旧成本
+                    const fuelCost = 1.5 * distance;
+                    const depreciationCost = 2 * distance;
                     cost = tmcCost + fuelCost + depreciationCost;
+
+                    console.log('计算的成本:', {
+                        distance,
+                        tmcMultiplier,
+                        tmcCost,
+                        fuelCost,
+                        depreciationCost,
+                        totalCost: cost
+                    });
                 }
                 break;
             case 'transit':
@@ -174,6 +196,8 @@ app.get('/api/route', async (req, res) => {
             }
         };
 
+        console.log('返回的路线信息:', routeInfo);
+
         if (callback) {
             res.jsonp(routeInfo);
         } else {
@@ -181,7 +205,7 @@ app.get('/api/route', async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Error:', error);
+        console.error('处理请求时发生错误:', error);
         const errorResponse = {
             status: "0",
             info: "服务器错误",
