@@ -118,6 +118,7 @@ app.get('/api/route', async (req, res) => {
         let distance = 0;
         let duration = 0;
         let cost = 0;
+        let costWithoutTmc = 0; // 添加不含TMC的成本
         let isAvailable = true; // 添加可用性标志
 
         switch (actualMode) {
@@ -149,17 +150,20 @@ app.get('/api/route', async (req, res) => {
                             
                             // 总成本 = 打车费用 + TMC成本
                             cost = taxiCost + tmcCost;
+                            costWithoutTmc = taxiCost; // 不含TMC的成本仅为打车费用
 
                             console.log('网约车成本计算:', {
                                 taxiCost,
                                 tmcCost,
                                 totalCost: cost,
+                                costWithoutTmc: costWithoutTmc,
                                 distance,
                                 tmcMultiplier
                             });
                         } else {
                             console.log('警告: API未返回打车费用');
                             cost = 0;
+                            costWithoutTmc = 0;
                             isAvailable = false;
                         }
                     } else {
@@ -195,6 +199,14 @@ app.get('/api/route', async (req, res) => {
                         const tmcCost = baseTmcPrice * distance * tmcMultiplier;
                         const operationCost = baseOperationCost * distance;
                         cost = tmcCost + operationCost;
+                        costWithoutTmc = operationCost; // 不含TMC的成本仅为运营成本
+
+                        console.log('驾车成本计算:', {
+                            tmcCost,
+                            operationCost,
+                            totalCost: cost,
+                            costWithoutTmc: costWithoutTmc
+                        });
                     }
                 }
                 break;
@@ -204,6 +216,7 @@ app.get('/api/route', async (req, res) => {
                     duration = Math.ceil(parseFloat(result.route.transits[0].duration) / 60);
                     // 使用API返回的实际公交费用
                     cost = result.route.transits[0].cost ? parseFloat(result.route.transits[0].cost) : 3;
+                    costWithoutTmc = cost; // 公交模式没有TMC成本，两者相同
                     
                     // 检查公交路线是否可用
                     if (duration === 0 || cost === 0) {
@@ -227,6 +240,7 @@ app.get('/api/route', async (req, res) => {
                     distance = parseFloat(result.route.paths[0].distance) / 1000;
                     duration = Math.ceil(parseFloat(result.route.paths[0].duration) / 60);
                     cost = 0;
+                    costWithoutTmc = 0; // 步行没有TMC成本
                 }
                 break;
             case 'bicycling':
@@ -239,8 +253,10 @@ app.get('/api/route', async (req, res) => {
                         // 电动自行车速度是普通自行车的1.67倍（时间为0.6倍）
                         duration = Math.ceil(duration * 0.6);
                         cost = 0.08 * distance; // 电动自行车每公里0.08元电费
+                        costWithoutTmc = cost; // 电动自行车没有TMC成本
                     } else {
                         cost = 0;
+                        costWithoutTmc = 0; // 自行车没有TMC成本
                     }
                 }
                 break;
@@ -254,6 +270,7 @@ app.get('/api/route', async (req, res) => {
                 distance: parseFloat(distance.toFixed(1)),
                 duration: isAvailable ? duration : 0,
                 cost: isAvailable ? parseFloat(cost.toFixed(1)) : 0,
+                cost_without_tmc: isAvailable ? parseFloat(costWithoutTmc.toFixed(1)) : 0, // 添加不含TMC的成本
                 available: isAvailable
             }
         };
@@ -276,6 +293,7 @@ app.get('/api/route', async (req, res) => {
                 distance: 0,
                 duration: 0,
                 cost: 0,
+                cost_without_tmc: 0, // 添加不含TMC的成本字段
                 available: false
             }
         };
@@ -284,6 +302,59 @@ app.get('/api/route', async (req, res) => {
         } else {
             res.json(errorResponse);
         }
+    }
+});
+
+// 添加调试端点
+app.get('/debug/route', async (req, res) => {
+    try {
+        const { origin, destination, mode } = req.query;
+        const amapKey = process.env.AMAP_API_KEY;
+
+        if (!origin || !destination || !mode) {
+            return res.json({
+                error: "Missing required parameters",
+                params: { origin, destination, mode }
+            });
+        }
+
+        const actualMode = mode === 'taxi' ? 'driving' : mode;
+        
+        let url;
+        switch (actualMode) {
+            case 'driving':
+                url = `https://restapi.amap.com/v3/direction/driving?origin=${origin}&destination=${destination}&extensions=all&key=${amapKey}`;
+                break;
+            case 'transit':
+                url = `https://restapi.amap.com/v3/direction/transit/integrated?origin=${origin}&destination=${destination}&city=0755&extensions=all&key=${amapKey}`;
+                break;
+            case 'walking':
+                url = `https://restapi.amap.com/v3/direction/walking?origin=${origin}&destination=${destination}&key=${amapKey}`;
+                break;
+            case 'bicycling':
+            case 'ebike':
+                url = `https://restapi.amap.com/v3/direction/riding?origin=${origin}&destination=${destination}&key=${amapKey}`;
+                break;
+            default:
+                return res.json({
+                    error: "Invalid mode",
+                    mode: mode
+                });
+        }
+
+        const response = await axios.get(url);
+        
+        // 返回原始API响应和处理后的数据
+        res.json({
+            raw_amap_response: response.data,
+            url_called: url
+        });
+
+    } catch (error) {
+        res.json({
+            error: error.message,
+            stack: error.stack
+        });
     }
 });
 
