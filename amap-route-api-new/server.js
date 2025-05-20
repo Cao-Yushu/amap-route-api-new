@@ -35,6 +35,30 @@ app.get('/', (req, res) => {
     }
 });
 
+// TMC 倍数生成函数
+function getRandomMultiplier(range, powerType = '燃油') {
+    let baseMultiplier;
+    if (range === 'low') {
+        baseMultiplier = Math.random() * 1 + Number.EPSILON; // (0,1]
+    } else if (range === 'mid') {
+        baseMultiplier = Math.random() * 1 + 1 + Number.EPSILON; // (1,2]
+    } else if (range === 'high') {
+        baseMultiplier = Math.random() * 1 + 2 + Number.EPSILON; // (2,3]
+    } else {
+        return 0; // none
+    }
+    
+    // 根据动力类型调整倍数
+    switch (powerType) {
+        case '混动（燃油+电动）':
+            return baseMultiplier * 0.7;
+        case '纯电动':
+            return baseMultiplier * 0.5;
+        default: // 燃油车或其他
+            return baseMultiplier;
+    }
+}
+
 // 主路由处理
 app.get('/api/route', async (req, res) => {
     try {
@@ -123,19 +147,6 @@ app.get('/api/route', async (req, res) => {
             return callback ? res.jsonp(error) : res.json(error);
         }
 
-        // TMC倍数生成函数
-        function getRandomMultiplier(range) {
-            if (range === 'low') {
-                return Math.random() * 1 + Number.EPSILON; // (0,1]
-            } else if (range === 'mid') {
-                return Math.random() * 1 + 1 + Number.EPSILON; // (1,2]
-            } else if (range === 'high') {
-                return Math.random() * 1 + 2 + Number.EPSILON; // (2,3]
-            } else {
-                return 0; // none
-            }
-        }
-
         let distance = 0;
         let duration = 0;
         let cost = 0;
@@ -150,14 +161,12 @@ app.get('/api/route', async (req, res) => {
                     duration = Math.ceil(parseFloat(result.route.paths[0].duration) / 60);
 
                     if (mode === 'taxi') {
-                        // 记录原始API返回的打车费用
                         const taxiCost = result.route.taxi_cost ? parseFloat(result.route.taxi_cost) : 0;
                         console.log('API返回的打车费用:', taxiCost);
 
                         if (taxiCost > 0) {
-                            // 出租车基础TMC价格
                             const baseTmcPrice = 0.35;
-                            tmcMultiplier = getRandomMultiplier(tmcRange);
+                            tmcMultiplier = getRandomMultiplier(tmcRange); // 出租车不需要考虑动力类型
                             const tmcCost = baseTmcPrice * distance * tmcMultiplier;
                             cost = taxiCost + tmcCost;
                             costWithoutTmc = taxiCost;
@@ -177,33 +186,38 @@ app.get('/api/route', async (req, res) => {
                             isAvailable = false;
                         }
                     } else {
-                        // 私家车基础TMC价格和运营成本
-                        let baseTmcPrice;
+                        // 私家车计算逻辑
+                        const baseTmcPrice = 0.5; // 统一使用燃油车的基础TMC价格
                         let baseOperationCost;
-                        if (powerType === '燃油') {
-                            baseTmcPrice = 0.5;
-                            baseOperationCost = 0.7;
-                        } else if (powerType === '混动（燃油+电动）') {
-                            baseTmcPrice = 0.35;
-                            baseOperationCost = 0.45;
-                        } else if (powerType === '纯电动') {
-                            baseTmcPrice = 0.25;
-                            baseOperationCost = 0.25;
-                        } else {
-                            baseTmcPrice = 0.5;
-                            baseOperationCost = 0.7;
+                        
+                        // 设置基础运营成本
+                        switch (powerType) {
+                            case '混动（燃油+电动）':
+                                baseOperationCost = 0.45;
+                                break;
+                            case '纯电动':
+                                baseOperationCost = 0.25;
+                                break;
+                            default: // 燃油车或其他
+                                baseOperationCost = 0.7;
+                                break;
                         }
-                        tmcMultiplier = getRandomMultiplier(tmcRange);
+
+                        // 获取考虑动力类型的TMC倍数
+                        tmcMultiplier = getRandomMultiplier(tmcRange, powerType);
                         const tmcCost = baseTmcPrice * distance * tmcMultiplier;
                         const operationCost = baseOperationCost * distance;
                         cost = tmcCost + operationCost;
                         costWithoutTmc = operationCost;
+                        
                         console.log('驾车成本计算:', {
+                            powerType,
+                            baseTmcPrice,
+                            tmcMultiplier,
                             tmcCost,
                             operationCost,
                             totalCost: cost,
-                            costWithoutTmc: costWithoutTmc,
-                            tmcMultiplier
+                            costWithoutTmc: costWithoutTmc
                         });
                     }
                 }
