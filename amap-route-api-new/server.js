@@ -28,7 +28,6 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
     const { callback } = req.query;
     const response = { status: '1', message: 'Service is running' };
-    
     if (callback) {
         res.jsonp(response);
     } else {
@@ -39,7 +38,7 @@ app.get('/', (req, res) => {
 // 主路由处理
 app.get('/api/route', async (req, res) => {
     try {
-        const { origin, destination, mode, powerType, tmcLevel = '1', callback } = req.query;
+        const { origin, destination, mode, powerType, tmcRange = 'none', callback } = req.query;
         const amapKey = process.env.AMAP_API_KEY;
 
         // 记录接收到的参数
@@ -48,7 +47,7 @@ app.get('/api/route', async (req, res) => {
             destination,
             mode,
             powerType,
-            tmcLevel,
+            tmcRange,
             hasCallback: !!callback
         });
 
@@ -60,7 +59,10 @@ app.get('/api/route', async (req, res) => {
                 route_info: {
                     distance: 0,
                     duration: 0,
-                    cost: 0
+                    cost: 0,
+                    cost_without_tmc: 0,
+                    tmc_multiplier: 0,
+                    available: false
                 }
             };
             return callback ? res.jsonp(error) : res.json(error);
@@ -92,7 +94,10 @@ app.get('/api/route', async (req, res) => {
                     route_info: {
                         distance: 0,
                         duration: 0,
-                        cost: 0
+                        cost: 0,
+                        cost_without_tmc: 0,
+                        tmc_multiplier: 0,
+                        available: false
                     }
                 };
                 return callback ? res.jsonp(error) : res.json(error);
@@ -109,17 +114,34 @@ app.get('/api/route', async (req, res) => {
                 route_info: {
                     distance: 0,
                     duration: 0,
-                    cost: 0
+                    cost: 0,
+                    cost_without_tmc: 0,
+                    tmc_multiplier: 0,
+                    available: false
                 }
             };
             return callback ? res.jsonp(error) : res.json(error);
         }
 
+        // TMC倍数生成函数
+        function getRandomMultiplier(range) {
+            if (range === 'low') {
+                return Math.random() * 1 + Number.EPSILON; // (0,1]
+            } else if (range === 'mid') {
+                return Math.random() * 1 + 1 + Number.EPSILON; // (1,2]
+            } else if (range === 'high') {
+                return Math.random() * 1 + 2 + Number.EPSILON; // (2,3]
+            } else {
+                return 0; // none
+            }
+        }
+
         let distance = 0;
         let duration = 0;
         let cost = 0;
-        let costWithoutTmc = 0; // 添加不含TMC的成本
-        let isAvailable = true; // 添加可用性标志
+        let costWithoutTmc = 0;
+        let tmcMultiplier = 0;
+        let isAvailable = true;
 
         switch (actualMode) {
             case 'driving':
@@ -133,25 +155,12 @@ app.get('/api/route', async (req, res) => {
                         console.log('API返回的打车费用:', taxiCost);
 
                         if (taxiCost > 0) {
-                            // 计算混动车TMC成本
-                            const baseTmcPrice = 0.35; // 混动车基准TMC价格
-                            let tmcMultiplier;
-                            switch (tmcLevel) {
-                                case '2':
-                                    tmcMultiplier = 2;
-                                    break;
-                                case '4':
-                                    tmcMultiplier = 4;
-                                    break;
-                                default:
-                                    tmcMultiplier = 1;
-                            }
+                            // 出租车基础TMC价格
+                            const baseTmcPrice = 0.35;
+                            tmcMultiplier = getRandomMultiplier(tmcRange);
                             const tmcCost = baseTmcPrice * distance * tmcMultiplier;
-                            
-                            // 总成本 = 打车费用 + TMC成本
                             cost = taxiCost + tmcCost;
-                            costWithoutTmc = taxiCost; // 不含TMC的成本仅为打车费用
-
+                            costWithoutTmc = taxiCost;
                             console.log('网约车成本计算:', {
                                 taxiCost,
                                 tmcCost,
@@ -164,10 +173,11 @@ app.get('/api/route', async (req, res) => {
                             console.log('警告: API未返回打车费用');
                             cost = 0;
                             costWithoutTmc = 0;
+                            tmcMultiplier = 0;
                             isAvailable = false;
                         }
                     } else {
-                        // 普通驾车成本计算
+                        // 私家车基础TMC价格和运营成本
                         let baseTmcPrice;
                         let baseOperationCost;
                         if (powerType === '燃油') {
@@ -183,29 +193,17 @@ app.get('/api/route', async (req, res) => {
                             baseTmcPrice = 0.5;
                             baseOperationCost = 0.7;
                         }
-
-                        let tmcMultiplier;
-                        switch (tmcLevel) {
-                            case '2':
-                                tmcMultiplier = 2;
-                                break;
-                            case '4':
-                                tmcMultiplier = 4;
-                                break;
-                            default:
-                                tmcMultiplier = 1;
-                        }
-
+                        tmcMultiplier = getRandomMultiplier(tmcRange);
                         const tmcCost = baseTmcPrice * distance * tmcMultiplier;
                         const operationCost = baseOperationCost * distance;
                         cost = tmcCost + operationCost;
-                        costWithoutTmc = operationCost; // 不含TMC的成本仅为运营成本
-
+                        costWithoutTmc = operationCost;
                         console.log('驾车成本计算:', {
                             tmcCost,
                             operationCost,
                             totalCost: cost,
-                            costWithoutTmc: costWithoutTmc
+                            costWithoutTmc: costWithoutTmc,
+                            tmcMultiplier
                         });
                     }
                 }
@@ -214,16 +212,13 @@ app.get('/api/route', async (req, res) => {
                 if (result.route && result.route.transits && result.route.transits[0]) {
                     distance = parseFloat(result.route.transits[0].distance) / 1000;
                     duration = Math.ceil(parseFloat(result.route.transits[0].duration) / 60);
-                    // 使用API返回的实际公交费用
                     cost = result.route.transits[0].cost ? parseFloat(result.route.transits[0].cost) : 3;
-                    costWithoutTmc = cost; // 公交模式没有TMC成本，两者相同
-                    
-                    // 检查公交路线是否可用
+                    costWithoutTmc = cost;
+                    tmcMultiplier = 0;
                     if (duration === 0 || cost === 0) {
                         console.log('警告: 公交路线不可用 - 时间或费用为0');
                         isAvailable = false;
                     }
-
                     console.log('公交路线信息:', {
                         rawCost: result.route.transits[0].cost,
                         parsedCost: cost,
@@ -240,7 +235,8 @@ app.get('/api/route', async (req, res) => {
                     distance = parseFloat(result.route.paths[0].distance) / 1000;
                     duration = Math.ceil(parseFloat(result.route.paths[0].duration) / 60);
                     cost = 0;
-                    costWithoutTmc = 0; // 步行没有TMC成本
+                    costWithoutTmc = 0;
+                    tmcMultiplier = 0;
                 }
                 break;
             case 'bicycling':
@@ -248,15 +244,15 @@ app.get('/api/route', async (req, res) => {
                 if (result.route && result.route.paths && result.route.paths[0]) {
                     distance = parseFloat(result.route.paths[0].distance) / 1000;
                     duration = Math.ceil(parseFloat(result.route.paths[0].duration) / 60);
-                    
                     if (mode === 'ebike') {
-                        // 电动自行车速度是普通自行车的1.67倍（时间为0.6倍）
                         duration = Math.ceil(duration * 0.6);
-                        cost = 0.08 * distance; // 电动自行车每公里0.08元电费
-                        costWithoutTmc = cost; // 电动自行车没有TMC成本
+                        cost = 0.08 * distance;
+                        costWithoutTmc = cost;
+                        tmcMultiplier = 0;
                     } else {
                         cost = 0;
-                        costWithoutTmc = 0; // 自行车没有TMC成本
+                        costWithoutTmc = 0;
+                        tmcMultiplier = 0;
                     }
                 }
                 break;
@@ -270,7 +266,8 @@ app.get('/api/route', async (req, res) => {
                 distance: parseFloat(distance.toFixed(1)),
                 duration: isAvailable ? duration : 0,
                 cost: isAvailable ? parseFloat(cost.toFixed(1)) : 0,
-                cost_without_tmc: isAvailable ? parseFloat(costWithoutTmc.toFixed(1)) : 0, // 添加不含TMC的成本
+                cost_without_tmc: isAvailable ? parseFloat(costWithoutTmc.toFixed(1)) : 0,
+                tmc_multiplier: isAvailable ? parseFloat(tmcMultiplier.toFixed(3)) : 0,
                 available: isAvailable
             }
         };
@@ -293,7 +290,8 @@ app.get('/api/route', async (req, res) => {
                 distance: 0,
                 duration: 0,
                 cost: 0,
-                cost_without_tmc: 0, // 添加不含TMC的成本字段
+                cost_without_tmc: 0,
+                tmc_multiplier: 0,
                 available: false
             }
         };
