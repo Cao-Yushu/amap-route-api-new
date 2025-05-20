@@ -39,13 +39,16 @@ app.get('/', (req, res) => {
 function getRandomMultiplier(range, powerType = '燃油') {
     let baseMultiplier;
     if (range === 'low') {
-        baseMultiplier = Math.random() * 1 + Number.EPSILON; // (0,1]
+        baseMultiplier = Math.random() * 0.5 + 0.01; // 0.01-0.51 约等于0-0.5
     } else if (range === 'mid') {
-        baseMultiplier = Math.random() * 1 + 1 + Number.EPSILON; // (1,2]
+        baseMultiplier = Math.random() * 0.5 + 0.5 + 0.01; // 0.51-1.01 约等于0.5-1
     } else if (range === 'high') {
-        baseMultiplier = Math.random() * 1 + 2 + Number.EPSILON; // (2,3]
+        baseMultiplier = Math.random() * 0.5 + 1 + 0.01; // 1.01-1.51 约等于1-1.5
+    } else if (range === 'none') {
+        // 当 TMC 额度充足时，仍然随机生成一个低价范围的 TMC 单价
+        baseMultiplier = Math.random() * 0.5 + 0.01; // 0.01-0.51
     } else {
-        return 0; // none
+        return 0; // 其他无效情况
     }
     
     // 根据动力类型调整倍数
