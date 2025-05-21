@@ -35,7 +35,7 @@ app.get('/', (req, res) => {
     }
 });
 
-// 会话管理 - 保存基础TMC倍数
+// 会话管理 - 保存基础TMC单价
 const sessions = new Map();
 
 // 清理过期会话（每小时运行一次）
@@ -48,55 +48,55 @@ setInterval(() => {
     }
 }, 60 * 60 * 1000);
 
-// 获取或创建基础TMC倍数
+// 生成基础TMC单价
+function generateBaseTmcMultiplier(range) {
+    let basePrice;
+    if (range === 'low') {
+        basePrice = Math.random() * 0.5 + 0.01; // 0.01-0.51 约等于0-0.5
+    } else if (range === 'mid') {
+        basePrice = Math.random() * 0.5 + 0.5 + 0.01; // 0.51-1.01 约等于0.5-1
+    } else if (range === 'high') {
+        basePrice = Math.random() * 0.5 + 1 + 0.01; // 1.01-1.51 约等于1-1.5
+    } else {
+        // 默认使用low级别
+        basePrice = Math.random() * 0.5 + 0.01;
+    }
+    return basePrice;
+}
+
+// 根据动力类型调整TMC单价
+function adjustTmcMultiplier(basePrice, powerType) {
+    switch (powerType) {
+        case '混动（燃油+电动）':
+            return basePrice * 0.7;
+        case '纯电动':
+            return basePrice * 0.5;
+        default: // 燃油车或其他
+            return basePrice;
+    }
+}
+
+// 获取或创建TMC单价
 function getBaseTmcMultiplier(sessionId, tmcRange) {
-    // 如果没有会话ID，则每次都创建新的基础倍数
+    // 如果没有会话ID，则每次都创建新的单价
     if (!sessionId) {
         return generateBaseTmcMultiplier(tmcRange);
     }
     
     // 检查会话是否存在且有相同的价格水平
     if (sessions.has(sessionId) && sessions.get(sessionId).tmcRange === tmcRange) {
-        return sessions.get(sessionId).baseMultiplier;
+        return sessions.get(sessionId).basePrice;
     }
     
-    // 创建新的基础倍数并保存
-    const baseMultiplier = generateBaseTmcMultiplier(tmcRange);
+    // 创建新的单价并保存
+    const basePrice = generateBaseTmcMultiplier(tmcRange);
     sessions.set(sessionId, {
-        baseMultiplier: baseMultiplier,
+        basePrice: basePrice,
         tmcRange: tmcRange,
         timestamp: Date.now()
     });
     
-    return baseMultiplier;
-}
-
-// 生成基础TMC倍数
-function generateBaseTmcMultiplier(range) {
-    let baseMultiplier;
-    if (range === 'low') {
-        baseMultiplier = Math.random() * 0.5 + 0.01; // 0.01-0.51 约等于0-0.5
-    } else if (range === 'mid') {
-        baseMultiplier = Math.random() * 0.5 + 0.5 + 0.01; // 0.51-1.01 约等于0.5-1
-    } else if (range === 'high') {
-        baseMultiplier = Math.random() * 0.5 + 1 + 0.01; // 1.01-1.51 约等于1-1.5
-    } else {
-        // 默认使用low级别
-        baseMultiplier = Math.random() * 0.5 + 0.01;
-    }
-    return baseMultiplier;
-}
-
-// 根据动力类型调整TMC倍数
-function adjustTmcMultiplier(baseMultiplier, powerType) {
-    switch (powerType) {
-        case '混动（燃油+电动）':
-            return baseMultiplier * 0.7;
-        case '纯电动':
-            return baseMultiplier * 0.5;
-        default: // 燃油车或其他
-            return baseMultiplier;
-    }
+    return basePrice;
 }
 
 // 主路由处理
@@ -196,10 +196,6 @@ app.get('/api/route', async (req, res) => {
         let tmcMultiplier = 0;
         let isAvailable = true;
 
-        // 获取基础TMC倍数（相同会话使用相同的基础倍数）
-        const baseTmcMultiplier = getBaseTmcMultiplier(sessionId, tmcRange);
-        console.log('基础TMC倍数:', baseTmcMultiplier);
-
         switch (actualMode) {
             case 'driving':
                 if (result.route && result.route.paths && result.route.paths[0]) {
@@ -211,18 +207,19 @@ app.get('/api/route', async (req, res) => {
                         console.log('API返回的打车费用:', taxiCost);
 
                         if (taxiCost > 0) {
-                            const baseTmcPrice = 0.35;
-                            // 出租车使用混动车的倍数调整(0.7)
-                            tmcMultiplier = baseTmcMultiplier * 0.7;
+                            // 获取基础TMC单价
+                            const baseTmcPrice = getBaseTmcMultiplier(sessionId, tmcRange);
+                            // 出租车统一按混动车计算（基础单价 × 0.7）
+                            tmcMultiplier = baseTmcPrice * 0.7;
                             
                             // 计算TMC成本（如果额度充足则为0）
-                            const tmcCost = hasTmcQuota === 'true' ? 0 : baseTmcPrice * distance * tmcMultiplier;
+                            const tmcCost = hasTmcQuota === 'true' ? 0 : distance * tmcMultiplier;
                             cost = taxiCost + tmcCost;
                             costWithoutTmc = taxiCost;
                             
                             console.log('网约车成本计算:', {
                                 taxiCost,
-                                baseTmcMultiplier,
+                                baseTmcPrice,
                                 tmcMultiplier,
                                 tmcCost,
                                 totalCost: cost,
@@ -239,7 +236,6 @@ app.get('/api/route', async (req, res) => {
                         }
                     } else {
                         // 私家车计算逻辑
-                        const baseTmcPrice = 0.5; // 统一使用燃油车的基础TMC价格
                         let baseOperationCost;
                         
                         // 设置基础运营成本
@@ -255,24 +251,25 @@ app.get('/api/route', async (req, res) => {
                                 break;
                         }
 
-                        // 根据动力类型调整TMC倍数
-                        tmcMultiplier = adjustTmcMultiplier(baseTmcMultiplier, powerType);
+                        // 获取基础TMC单价并根据动力类型调整
+                        const baseTmcPrice = getBaseTmcMultiplier(sessionId, tmcRange);
+                        tmcMultiplier = adjustTmcMultiplier(baseTmcPrice, powerType);
                         
                         // 计算TMC成本（如果额度充足则为0）
-                        const tmcCost = hasTmcQuota === 'true' ? 0 : baseTmcPrice * distance * tmcMultiplier;
+                        const tmcCost = hasTmcQuota === 'true' ? 0 : distance * tmcMultiplier;
                         const operationCost = baseOperationCost * distance;
                         cost = tmcCost + operationCost;
                         costWithoutTmc = operationCost;
                         
-                        console.log('驾车成本计算:', {
+                        console.log('私家车成本计算:', {
                             powerType,
                             baseTmcPrice,
-                            baseTmcMultiplier,
                             tmcMultiplier,
                             tmcCost,
                             operationCost,
                             totalCost: cost,
                             costWithoutTmc: costWithoutTmc,
+                            distance,
                             hasTmcQuota
                         });
                     }
@@ -289,13 +286,6 @@ app.get('/api/route', async (req, res) => {
                         console.log('警告: 公交路线不可用 - 时间或费用为0');
                         isAvailable = false;
                     }
-                    console.log('公交路线信息:', {
-                        rawCost: result.route.transits[0].cost,
-                        parsedCost: cost,
-                        duration: duration,
-                        isAvailable: isAvailable,
-                        transitInfo: result.route.transits[0]
-                    });
                 } else {
                     isAvailable = false;
                 }
