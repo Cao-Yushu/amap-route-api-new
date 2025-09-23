@@ -212,13 +212,17 @@ app.get('/api/route', async (req, res) => {
                             // 出租车统一按混动车计算（基础单价 × 0.7）
                             tmcMultiplier = baseTmcPrice * 0.7;
                             
+                            // 将API返回的出租车费用调整为70%
+                            const adjustedTaxiCost = taxiCost * 0.7;
+                            
                             // 计算TMC成本（如果额度充足则为0）
                             const tmcCost = hasTmcQuota === 'true' ? 0 : distance * tmcMultiplier;
-                            cost = taxiCost + tmcCost;
-                            costWithoutTmc = taxiCost;
+                            cost = adjustedTaxiCost + tmcCost;
+                            costWithoutTmc = adjustedTaxiCost;
                             
                             console.log('网约车成本计算:', {
-                                taxiCost,
+                                originalTaxiCost: taxiCost,
+                                adjustedTaxiCost,
                                 baseTmcPrice,
                                 tmcMultiplier,
                                 tmcCost,
@@ -419,4 +423,3 @@ app.get('/debug/route', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
-
