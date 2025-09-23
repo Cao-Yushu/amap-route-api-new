@@ -213,7 +213,7 @@ app.get('/api/route', async (req, res) => {
                             tmcMultiplier = baseTmcPrice * 0.7;
                             
                             // 将API返回的出租车费用调整为70%
-                            const adjustedTaxiCost = taxiCost * 0.7;
+                            const adjustedTaxiCost = taxiCost * 0.65;
                             
                             // 计算TMC成本（如果额度充足则为0）
                             const tmcCost = hasTmcQuota === 'true' ? 0 : distance * tmcMultiplier;
@@ -423,3 +423,4 @@ app.get('/debug/route', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
+
