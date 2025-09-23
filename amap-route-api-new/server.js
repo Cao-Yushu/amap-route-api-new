@@ -314,8 +314,8 @@ app.get('/api/route', async (req, res) => {
                         costWithoutTmc = cost;
                         tmcMultiplier = 0;
                     } else {
-                        cost = 0;
-                        costWithoutTmc = 0;
+                        cost = 1;  // 自行车基础出行成本设为1元
+                        costWithoutTmc = 1;
                         tmcMultiplier = 0;
                     }
                 }
