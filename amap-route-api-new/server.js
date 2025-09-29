@@ -309,7 +309,7 @@ app.get('/api/route', async (req, res) => {
                     distance = parseFloat(result.route.paths[0].distance) / 1000;
                     duration = Math.ceil(parseFloat(result.route.paths[0].duration) / 60);
                     if (mode === 'ebike') {
-                        duration = Math.ceil(duration * 0.6);
+                        duration = Math.ceil(duration * 0.725);
                         cost = 0.08 * distance;
                         costWithoutTmc = cost;
                         tmcMultiplier = 0;
@@ -423,4 +423,5 @@ app.get('/debug/route', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
+
 
