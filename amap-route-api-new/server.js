@@ -52,14 +52,14 @@ setInterval(() => {
 function generateBaseTmcMultiplier(range) {
     let basePrice;
     if (range === 'low') {
-        basePrice = Math.random() * 0.25 + 0.01; // 0.01-0.25 约等于燃油车价格单位里程成本一半
+        basePrice = Math.random() * 0.5 + 0.01; // 0.01-0.25 约等于燃油车价格单位里程成本一半
     } else if (range === 'mid') {
-        basePrice = Math.random() * 0.25 + 0.25 + 0.01; // 0.26-0.51 约等于燃油车价格单位里程成本一倍
+        basePrice = Math.random() * 0.5 + 0.5 + 0.01; // 0.26-0.51 约等于燃油车价格单位里程成本一倍
     } else if (range === 'high') {
-        basePrice = Math.random() * 0.25 + 0.5 + 0.01; // 0.51-1.01 约等于燃油车价格单位里程成本1.5倍
+        basePrice = Math.random() * 0.5 + 1 + 0.01; // 0.51-1.01 约等于燃油车价格单位里程成本1.5倍
     } else {
         // 默认使用low级别
-        basePrice = Math.random() * 0.25 + 0.01;
+        basePrice = Math.random() * 0.5 + 0.01;
     }
     return basePrice;
 }
@@ -423,3 +423,4 @@ app.get('/debug/route', async (req, res) => {
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
+
